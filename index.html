@@ -8,7 +8,7 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- SortableJS for Drag and Drop (Touch optimized version) -->
+    <!-- SortableJS for Drag and Drop -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     
     <!-- html2pdf for PDF Export -->
@@ -543,7 +543,7 @@
             lucide.createIcons();
         };
 
-        const executePDFExport = (htmlContent, filename) => {
+        const executePDFExport = (htmlContent, filename, btnId) => {
             const overlay = document.getElementById('export-overlay');
             const container = document.getElementById('pdf-render-container');
             
@@ -563,7 +563,8 @@
                     margin: 0, 
                     filename: filename,
                     image: { type: 'jpeg', quality: 0.98 },
-                    html2canvas: { scale: 2, useCORS: true, letterRendering: true, logging: false },
+                    // CRITICAL FIX: Removed letterRendering: true. This prevents html2canvas from breaking Arabic word spaces.
+                    html2canvas: { scale: 2, useCORS: true, logging: false },
                     jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
                 };
                 
@@ -571,10 +572,13 @@
                     overlay.classList.add('hidden');
                     overlay.classList.remove('flex');
                     container.innerHTML = '';
+                    if (btnId) setButtonLoading(btnId, false); // Reset button state on success
                 }).catch(err => {
                     console.error("PDF generation error: ", err);
                     overlay.classList.add('hidden');
                     overlay.classList.remove('flex');
+                    container.innerHTML = '';
+                    if (btnId) setButtonLoading(btnId, false); // Reset button state on error
                     alert("Error generating PDF. Please try again.");
                 });
             }, 800); // 800ms gives excellent stability for Arabic font rendering
@@ -592,7 +596,8 @@
         `;
 
         const exportSyllabusPDF = () => {
-            setButtonLoading('btn-export-syllabus', true);
+            const btnId = 'btn-export-syllabus';
+            setButtonLoading(btnId, true);
             recalculateTimings();
             state.title = document.getElementById('project-title').value;
             const isAr = state.lang === 'ar';
@@ -646,11 +651,12 @@
             });
             html += `</div>`;
             
-            executePDFExport(html, filename);
+            executePDFExport(html, filename, btnId);
         };
 
         const exportTimelinePDF = () => {
-            setButtonLoading('btn-export-timeline', true);
+            const btnId = 'btn-export-timeline';
+            setButtonLoading(btnId, true);
             recalculateTimings();
             state.title = document.getElementById('project-title').value;
             const isAr = state.lang === 'ar';
@@ -680,7 +686,6 @@
                 `;
 
                 let blocks = '';
-                // Standard flex handles RTL fine here because we placed dir="rtl" on parent
                 day.items.forEach(item => {
                     const widthPercent = Math.max(0.5, (item.duration / totalMins) * 100);
                     const color = item.color || defaultColors[item.type];
@@ -722,7 +727,7 @@
             });
             html += `</div>`;
 
-            executePDFExport(html, filename);
+            executePDFExport(html, filename, btnId);
         };
 
         // --- Initialize ---
