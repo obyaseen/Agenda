@@ -30,7 +30,7 @@
         }
     </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Inter:wght@400;500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap');
 
         :root {
             --font-en: 'Inter', sans-serif;
@@ -41,7 +41,7 @@
         body[dir="rtl"] { font-family: var(--font-ar); }
 
         /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
@@ -56,27 +56,20 @@
         input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         input[type="number"] { -moz-appearance: textfield; }
 
+        /* Custom Color Picker Styling */
         input[type="color"] {
             -webkit-appearance: none;
             border: none;
-            width: 24px;
-            height: 24px;
-            border-radius: 4px;
-            cursor: pointer;
             padding: 0;
+            background: transparent;
         }
         input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
-        input[type="color"]::-webkit-color-swatch { border: 1px solid #cbd5e1; border-radius: 4px; }
-
-        .timeline-block { transition: width 0.3s ease; }
+        input[type="color"]::-webkit-color-swatch { border: 2px solid #e2e8f0; border-radius: 6px; }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen text-slate-800 selection:bg-primary selection:text-white transition-all duration-300">
 
     <div id="app"></div>
-
-    <!-- Hidden container for PDF Generation -->
-    <div id="pdf-container" class="hidden"></div>
 
     <!-- Notification Toast -->
     <div id="toast" class="fixed bottom-4 end-4 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center gap-3 z-50">
@@ -91,15 +84,15 @@
                 appTitle: "Project Title",
                 import: "Import",
                 exportJson: "Export JSON",
-                exportSyllabus: "Export Syllabus PDF",
-                exportTimeline: "Export Timeline PDF",
+                exportSyllabus: "Syllabus PDF",
+                exportTimeline: "Timeline PDF",
                 tabBuilder: "Agenda Builder",
                 tabTimeline: "Timeline View",
                 addDay: "Add Day",
                 day: "Day",
                 startTime: "Start Time",
                 endTime: "End Time",
-                autoAdjust: "Auto-adjust session durations to fit End Time",
+                autoAdjust: "Auto-adjust durations to fit End Time",
                 addSession: "Add Session",
                 addBreak: "Add Break",
                 session: "Session",
@@ -107,7 +100,8 @@
                 logistic: "Logistic",
                 titlePlaceholder: "Session Title",
                 descPlaceholder: "Add description...",
-                duration: "Duration (min)",
+                duration: "Duration",
+                color: "Color",
                 to: "to",
                 deleteConfirm: "Are you sure you want to delete this day?",
                 imported: "Data imported successfully.",
@@ -119,15 +113,15 @@
                 appTitle: "عنوان المشروع",
                 import: "استيراد",
                 exportJson: "تصدير JSON",
-                exportSyllabus: "تصدير المنهج PDF",
-                exportTimeline: "تصدير المخطط الزمني PDF",
+                exportSyllabus: "PDF المنهج",
+                exportTimeline: "PDF المخطط",
                 tabBuilder: "باني الجدول",
                 tabTimeline: "العرض الزمني",
                 addDay: "إضافة يوم",
                 day: "يوم",
                 startTime: "وقت البدء",
                 endTime: "وقت الانتهاء",
-                autoAdjust: "ضبط مدة الجلسات تلقائياً لتناسب وقت الانتهاء",
+                autoAdjust: "ضبط المدة تلقائياً لتناسب وقت الانتهاء",
                 addSession: "إضافة جلسة",
                 addBreak: "إضافة استراحة",
                 session: "جلسة",
@@ -135,7 +129,8 @@
                 logistic: "لوجستي",
                 titlePlaceholder: "عنوان الجلسة",
                 descPlaceholder: "إضافة وصف...",
-                duration: "المدة (دقائق)",
+                duration: "المدة",
+                color: "اللون",
                 to: "إلى",
                 deleteConfirm: "هل أنت متأكد من حذف هذا اليوم؟",
                 imported: "تم استيراد البيانات بنجاح.",
@@ -176,7 +171,7 @@
         // --- 2. State Management ---
         let state = {
             lang: 'en',
-            tab: 'builder', // 'builder' or 'timeline'
+            tab: 'builder',
             title: "Executive Leadership Program",
             days: [
                 {
@@ -189,7 +184,7 @@
                         { id: generateId(), title: "Registration & Breakfast", type: "logistic", duration: 30, desc: "Welcome packets in lobby.", color: defaultColors.logistic },
                         { id: generateId(), title: "Opening Keynote", type: "session", duration: 90, desc: "Setting the stage for the week.", color: defaultColors.session },
                         { id: generateId(), title: "Coffee Break", type: "break", duration: 15, desc: "Networking.", color: defaultColors.break },
-                        { id: generateId(), title: "Strategic Frameworks", type: "session", duration: 120, desc: "Interactive workshop.", color: defaultColors.session },
+                        { id: generateId(), title: "Strategic Frameworks", type: "session", duration: 120, desc: "Interactive workshop breaking down Q3 targets.", color: defaultColors.session },
                         { id: generateId(), title: "Lunch", type: "break", duration: 60, desc: "Catered lunch.", color: defaultColors.break }
                     ]
                 }
@@ -205,29 +200,21 @@
                 let endMins = timeToMins(day.endTime);
 
                 if (day.autoAdjust && startMins < endMins) {
-                    // Auto-adjust sessions to fit within start and end time
                     const totalAvailableMins = endMins - startMins;
-                    
-                    // Fixed items (breaks, logistics) keep their duration
                     const fixedItems = day.items.filter(i => i.type !== 'session');
                     const flexItems = day.items.filter(i => i.type === 'session');
                     
                     const fixedMins = fixedItems.reduce((sum, i) => sum + (Number(i.duration) || 0), 0);
                     const remainingMins = Math.max(0, totalAvailableMins - fixedMins);
                     
-                    // Distribute equally among flexible sessions
                     const flexDuration = flexItems.length > 0 ? Math.floor(remainingMins / flexItems.length) : 0;
-                    
-                    // Apply calculated durations
                     flexItems.forEach(i => i.duration = flexDuration);
                     
-                    // Handle remainder (give extra minutes to the last session to perfectly align)
                     if (flexItems.length > 0 && remainingMins % flexItems.length !== 0) {
                         flexItems[flexItems.length - 1].duration += (remainingMins % flexItems.length);
                     }
                 }
 
-                // Calculate visual Start/End times for each block
                 let currentMins = startMins;
                 day.items.forEach(item => {
                     item._calculatedStart = minsToTime(currentMins);
@@ -235,7 +222,6 @@
                     item._calculatedEnd = minsToTime(currentMins);
                 });
 
-                // If NOT auto-adjusting, the day's end time is dictated by the items
                 if (!day.autoAdjust) {
                     day.endTime = minsToTime(currentMins);
                 }
@@ -258,49 +244,48 @@
             app.innerHTML = `
                 <!-- Header -->
                 <header class="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm">
-                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
-                        <div class="flex items-center gap-3 w-full md:w-auto">
-                            <div class="bg-primary p-2 rounded-lg text-white shrink-0">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col xl:flex-row justify-between items-center gap-4">
+                        <div class="flex items-center gap-3 w-full xl:w-auto">
+                            <div class="bg-primary p-2 rounded-lg text-white shrink-0 shadow-sm">
                                 <i data-lucide="calendar-clock"></i>
                             </div>
-                            <input type="text" id="project-title" value="${state.title}" class="text-xl md:text-2xl font-bold bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none transition-colors w-full md:w-80" placeholder="${t('appTitle')}">
+                            <input type="text" id="project-title" value="${state.title}" class="text-xl md:text-2xl font-bold text-slate-800 bg-transparent border-b-2 border-transparent hover:border-slate-300 focus:border-primary focus:outline-none transition-colors w-full xl:w-80" placeholder="${t('appTitle')}">
                         </div>
                         
                         <div class="flex flex-wrap items-center gap-2 text-sm justify-center">
-                            <button onclick="toggleLang()" class="px-3 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md font-medium">
+                            <button onclick="toggleLang()" class="px-3 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md font-medium border border-slate-200">
                                 ${state.lang === 'en' ? 'عربي' : 'English'}
                             </button>
                             <input type="file" id="import-file" accept=".json" class="hidden" onchange="importJSON(event)">
-                            <button onclick="document.getElementById('import-file').click()" class="flex items-center gap-2 px-3 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors">
-                                <i data-lucide="upload" class="w-4 h-4"></i> <span class="hidden sm:inline">${t('import')}</span>
+                            <button onclick="document.getElementById('import-file').click()" class="flex items-center gap-2 px-3 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors border border-slate-200" title="${t('import')}">
+                                <i data-lucide="upload" class="w-4 h-4"></i> <span class="hidden md:inline">${t('import')}</span>
                             </button>
-                            <button onclick="exportJSON()" class="flex items-center gap-2 px-3 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors">
-                                <i data-lucide="download" class="w-4 h-4"></i> <span class="hidden sm:inline">${t('exportJson')}</span>
+                            <button onclick="exportJSON()" class="flex items-center gap-2 px-3 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors border border-slate-200" title="${t('exportJson')}">
+                                <i data-lucide="download" class="w-4 h-4"></i> <span class="hidden md:inline">${t('exportJson')}</span>
                             </button>
-                            ${state.tab === 'builder' ? `
-                            <button onclick="exportSyllabusPDF()" class="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-indigo-700 text-white rounded-md shadow-sm transition-colors font-medium">
-                                <i data-lucide="file-text" class="w-4 h-4"></i> <span class="hidden sm:inline">${t('exportSyllabus')}</span>
-                            </button>` : `
-                            <button onclick="exportTimelinePDF()" class="flex items-center gap-2 px-4 py-2 bg-secondary hover:bg-sky-600 text-white rounded-md shadow-sm transition-colors font-medium">
-                                <i data-lucide="bar-chart-horizontal" class="w-4 h-4"></i> <span class="hidden sm:inline">${t('exportTimeline')}</span>
-                            </button>`}
+                            <button onclick="exportSyllabusPDF()" class="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md shadow-sm transition-colors font-medium">
+                                <i data-lucide="file-text" class="w-4 h-4"></i> <span>${t('exportSyllabus')}</span>
+                            </button>
+                            <button onclick="exportTimelinePDF()" class="flex items-center gap-2 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-md shadow-sm transition-colors font-medium">
+                                <i data-lucide="presentation" class="w-4 h-4"></i> <span>${t('exportTimeline')}</span>
+                            </button>
                         </div>
                     </div>
                     
                     <!-- Tabs -->
-                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-6 border-t border-slate-100 mt-2">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-6 mt-2">
                         <button onclick="switchTab('builder')" class="py-3 px-1 border-b-2 font-medium text-sm transition-colors ${state.tab === 'builder' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}">
                             <div class="flex items-center gap-2"><i data-lucide="layout-list" class="w-4 h-4"></i> ${t('tabBuilder')}</div>
                         </button>
                         <button onclick="switchTab('timeline')" class="py-3 px-1 border-b-2 font-medium text-sm transition-colors ${state.tab === 'timeline' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}">
-                            <div class="flex items-center gap-2"><i data-lucide="gantt-chart" class="w-4 h-4"></i> ${t('tabTimeline')}</div>
+                            <div class="flex items-center gap-2"><i data-lucide="split-square-vertical" class="w-4 h-4"></i> ${t('tabTimeline')}</div>
                         </button>
                     </div>
                 </header>
 
                 <!-- Main Content -->
-                <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" id="main-content">
-                    ${state.tab === 'builder' ? renderBuilder() : renderTimeline()}
+                <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    ${state.tab === 'builder' ? renderBuilder() : renderTimelineContainer()}
                 </main>
             `;
 
@@ -310,7 +295,7 @@
         };
 
         const switchTab = (tab) => {
-            state.title = document.getElementById('project-title').value; // Save title
+            state.title = document.getElementById('project-title').value;
             state.tab = tab;
             renderApp();
         };
@@ -341,23 +326,23 @@
                                     <input type="text" class="font-bold text-lg text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none w-full day-title-input" value="${day.title}" data-day-id="${day.id}">
                                 </div>
                             </div>
-                            <button class="text-slate-400 hover:text-red-500 p-1 ms-2" onclick="deleteDay('${day.id}')">
+                            <button class="text-slate-400 hover:text-red-500 p-1 ms-2 transition-colors" onclick="deleteDay('${day.id}')">
                                 <i data-lucide="x" class="w-5 h-5"></i>
                             </button>
                         </div>
                         
                         <div class="grid grid-cols-2 gap-4 bg-white p-3 rounded-lg border border-slate-200 mb-3 text-sm">
                             <div>
-                                <label class="block text-xs text-slate-500 mb-1">${t('startTime')}</label>
-                                <input type="time" class="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 focus:outline-none focus:border-primary day-start-input" value="${day.startTime}" data-day-id="${day.id}">
+                                <label class="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">${t('startTime')}</label>
+                                <input type="time" class="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary day-start-input" value="${day.startTime}" data-day-id="${day.id}">
                             </div>
                             <div>
-                                <label class="block text-xs text-slate-500 mb-1">${t('endTime')} ${!day.autoAdjust ? '(Auto)' : ''}</label>
-                                <input type="time" class="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 focus:outline-none focus:border-primary day-end-input" value="${day.endTime}" data-day-id="${day.id}" ${!day.autoAdjust ? 'readonly disabled class="opacity-60"' : ''}>
+                                <label class="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">${t('endTime')} ${!day.autoAdjust ? '(Auto)' : ''}</label>
+                                <input type="time" class="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary day-end-input" value="${day.endTime}" data-day-id="${day.id}" ${!day.autoAdjust ? 'readonly disabled class="opacity-60"' : ''}>
                             </div>
                         </div>
                         
-                        <label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer p-1 hover:bg-slate-100 rounded">
+                        <label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer p-1 hover:bg-slate-100 rounded transition-colors w-fit">
                             <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary day-auto-checkbox" data-day-id="${day.id}" ${day.autoAdjust ? 'checked' : ''}>
                             ${t('autoAdjust')}
                         </label>
@@ -382,44 +367,47 @@
         };
 
         const renderItem = (day, item) => {
-            const isAutoCalculated = day.autoAdjust && item.type === 'session';
+            const isAuto = day.autoAdjust && item.type === 'session';
+            const currentColor = item.color || defaultColors[item.type];
             
             return `
-                <div class="group relative bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md transition-all mb-3 overflow-hidden border-s-4" style="border-inline-start-color: ${item.color || defaultColors[item.type]}" data-item-id="${item.id}">
-                    <div class="p-3 flex items-start gap-2 sm:gap-3">
+                <div class="group relative bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md transition-all mb-3 overflow-hidden border-s-4" style="border-inline-start-color: ${currentColor}" data-item-id="${item.id}">
+                    <div class="p-3 flex items-start gap-2">
                         <div class="drag-handle mt-1 text-slate-300 hover:text-slate-500 p-1 shrink-0">
                             <i data-lucide="grip-vertical" class="w-5 h-5"></i>
                         </div>
 
                         <!-- Timing -->
-                        <div class="flex flex-col items-center justify-center min-w-[60px] sm:min-w-[70px] mt-1 shrink-0">
-                            <span class="text-sm font-semibold text-slate-700">${item._calculatedStart}</span>
-                            <span class="text-[10px] sm:text-xs text-slate-400 leading-none my-0.5">${t('to')}</span>
-                            <span class="text-sm font-semibold text-slate-600">${item._calculatedEnd}</span>
+                        <div class="flex flex-col items-center justify-center min-w-[65px] mt-1 shrink-0 bg-slate-50 rounded py-1 px-2 border border-slate-100">
+                            <span class="text-xs font-bold text-slate-700">${item._calculatedStart}</span>
+                            <span class="text-[10px] text-slate-400 my-0.5">${t('to')}</span>
+                            <span class="text-xs font-bold text-slate-600">${item._calculatedEnd}</span>
                         </div>
 
                         <!-- Content -->
-                        <div class="flex-1 min-w-0">
-                            <div class="flex flex-wrap items-center gap-2 mb-1">
-                                <input type="text" class="font-medium text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none w-full sm:flex-1 text-sm sm:text-base item-title-input" value="${item.title}" placeholder="${t('titlePlaceholder')}" data-day-id="${day.id}" data-item-id="${item.id}">
+                        <div class="flex-1 min-w-0 ms-1">
+                            <div class="flex flex-wrap items-center gap-2 mb-2">
+                                <input type="text" class="font-bold text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none flex-1 min-w-[120px] text-sm item-title-input" value="${item.title}" placeholder="${t('titlePlaceholder')}" data-day-id="${day.id}" data-item-id="${item.id}">
                                 
-                                <div class="flex items-center gap-1 w-full sm:w-auto">
-                                    <input type="color" value="${item.color || defaultColors[item.type]}" class="item-color-input" data-day-id="${day.id}" data-item-id="${item.id}" title="Color">
-                                    <select class="text-xs rounded border border-slate-200 bg-slate-50 text-slate-600 px-1 py-1 focus:outline-none focus:border-primary item-type-select" data-day-id="${day.id}" data-item-id="${item.id}">
+                                <!-- Color and Type Picker -->
+                                <div class="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-200 shrink-0">
+                                    <input type="color" value="${currentColor}" class="item-color-input w-5 h-5 rounded cursor-pointer shrink-0" data-day-id="${day.id}" data-item-id="${item.id}" title="${t('color')}">
+                                    <div class="w-px h-4 bg-slate-300"></div>
+                                    <select class="text-xs bg-transparent text-slate-600 focus:outline-none focus:text-primary item-type-select font-medium cursor-pointer" data-day-id="${day.id}" data-item-id="${item.id}">
                                         <option value="session" ${item.type === 'session' ? 'selected' : ''}>${t('session')}</option>
                                         <option value="break" ${item.type === 'break' ? 'selected' : ''}>${t('break')}</option>
                                         <option value="logistic" ${item.type === 'logistic' ? 'selected' : ''}>${t('logistic')}</option>
                                     </select>
                                 </div>
                             </div>
-                            <textarea class="text-xs sm:text-sm text-slate-500 bg-transparent border border-transparent hover:border-slate-200 focus:border-primary rounded p-1 focus:outline-none w-full resize-none item-desc-input" rows="1" placeholder="${t('descPlaceholder')}" data-day-id="${day.id}" data-item-id="${item.id}">${item.desc || ''}</textarea>
+                            <textarea class="text-xs text-slate-500 bg-transparent border border-transparent hover:border-slate-200 focus:border-primary rounded p-1 focus:outline-none w-full resize-none item-desc-input" rows="1" placeholder="${t('descPlaceholder')}" data-day-id="${day.id}" data-item-id="${item.id}">${item.desc || ''}</textarea>
                         </div>
 
-                        <!-- Duration & Actions -->
+                        <!-- Duration & Delete -->
                         <div class="flex flex-col items-end gap-2 shrink-0">
-                            <div class="flex items-center bg-slate-50 border border-slate-200 rounded-md overflow-hidden ${isAutoCalculated ? 'opacity-60 bg-slate-100' : ''}" title="${isAutoCalculated ? 'Calculated automatically' : t('duration')}">
-                                <input type="number" class="w-12 sm:w-14 text-center py-1 text-xs sm:text-sm font-medium focus:outline-none focus:bg-white item-duration-input" value="${item.duration}" min="0" data-day-id="${day.id}" data-item-id="${item.id}" ${isAutoCalculated ? 'readonly tabindex="-1"' : ''}>
-                                <span class="px-1 sm:px-2 text-[10px] sm:text-xs text-slate-500 bg-slate-100 border-s border-slate-200 py-1.5">m</span>
+                            <div class="flex items-center bg-slate-50 border border-slate-200 rounded overflow-hidden ${isAuto ? 'opacity-60' : ''}" title="${isAuto ? 'Calculated automatically' : t('duration')}">
+                                <input type="number" class="w-12 text-center py-1 text-xs font-semibold focus:outline-none focus:bg-white item-duration-input" value="${item.duration}" min="0" data-day-id="${day.id}" data-item-id="${item.id}" ${isAuto ? 'readonly tabindex="-1"' : ''}>
+                                <span class="px-1.5 text-[10px] font-medium text-slate-500 bg-slate-100 border-s border-slate-200 py-1.5">m</span>
                             </div>
                             <button onclick="deleteItem('${day.id}', '${item.id}')" class="text-slate-300 hover:text-red-500 transition-colors p-1 rounded hover:bg-red-50">
                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
@@ -430,63 +418,87 @@
             `;
         };
 
-        // --- Render: Timeline Tab ---
-        const renderTimeline = () => {
+        // --- Render: Timeline Tab (Vertical Layout showing all text) ---
+        const renderTimelineContainer = () => {
             return `
-                <div id="timeline-export-area" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-8">
-                    <div class="text-center mb-10 border-b border-slate-200 pb-6">
+                <div id="timeline-export-area" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-10 max-w-4xl mx-auto">
+                    ${generateTimelineHTML(false)}
+                </div>
+            `;
+        };
+
+        const generateTimelineHTML = (isExport = true) => {
+            recalculateTimings();
+            const daysHTML = state.days.map((day, index) => renderTimelineDay(day, index)).join('');
+            
+            return `
+                <div class="text-slate-800" dir="${state.lang === 'ar' ? 'rtl' : 'ltr'}" style="${isExport ? `font-family: ${state.lang === 'ar' ? "'Cairo', sans-serif" : "'Inter', sans-serif"};` : ''}">
+                    <div class="text-center mb-12 border-b-2 border-slate-100 pb-8">
                         <h2 class="text-3xl font-bold text-slate-800 mb-2">${state.title || t('appTitle')}</h2>
-                        <p class="text-slate-500 flex items-center justify-center gap-2">
-                            <i data-lucide="clock" class="w-4 h-4"></i> ${t('tabTimeline')}
+                        <p class="text-slate-500 flex items-center justify-center gap-2 font-medium">
+                            <i data-lucide="split-square-vertical" class="w-4 h-4"></i> ${t('tabTimeline')}
                         </p>
                     </div>
-
-                    <div class="space-y-12">
-                        ${state.days.map((day, index) => renderTimelineDay(day, index)).join('')}
-                    </div>
-                    
-                    <div class="mt-12 pt-6 border-t border-slate-200 flex justify-center gap-6 text-sm text-slate-600">
-                        <div class="flex items-center gap-2"><div class="w-4 h-4 rounded" style="background-color: ${defaultColors.session}"></div> ${t('session')}</div>
-                        <div class="flex items-center gap-2"><div class="w-4 h-4 rounded" style="background-color: ${defaultColors.break}"></div> ${t('break')}</div>
-                        <div class="flex items-center gap-2"><div class="w-4 h-4 rounded" style="background-color: ${defaultColors.logistic}"></div> ${t('logistic')}</div>
+                    <div class="space-y-16">
+                        ${daysHTML}
                     </div>
                 </div>
             `;
         };
 
         const renderTimelineDay = (day, index) => {
-            const totalMins = day._totalDuration > 0 ? day._totalDuration : 1; // Prevent div by 0
+            const totalMins = day._totalDuration > 0 ? day._totalDuration : 1;
             
-            // Build the visual blocks
-            const blocks = day.items.map(item => {
-                const widthPercent = Math.max(2, (item.duration / totalMins) * 100); // min 2% width
+            // 1. Proportional Visualizer Bar (Top)
+            const barBlocks = day.items.map(item => {
+                const widthPercent = Math.max(0.5, (item.duration / totalMins) * 100);
                 const color = item.color || defaultColors[item.type];
+                return `<div class="h-full border-e border-white/30 last:border-0" style="width: ${widthPercent}%; background-color: ${color};" title="${item.title}"></div>`;
+            }).join('');
+
+            // 2. Full Text Vertical Nodes (Bottom)
+            const listItems = day.items.map((item, idx) => {
+                const color = item.color || defaultColors[item.type];
+                const isLast = idx === day.items.length - 1;
                 
                 return `
-                    <div class="relative h-full border-e border-white/20 group timeline-block flex flex-col justify-center px-2 hover:opacity-90 transition-opacity" style="width: ${widthPercent}%; background-color: ${color};" title="${item.title} (${item._calculatedStart} - ${item._calculatedEnd})">
-                        <div class="text-white text-xs font-bold truncate">${item._calculatedStart}</div>
-                        <div class="text-white/90 text-[10px] sm:text-xs truncate font-medium mt-0.5 leading-tight whitespace-nowrap overflow-hidden text-ellipsis">${item.title}</div>
+                    <div class="relative flex items-start gap-4 mb-4 group page-break-inside-avoid" style="page-break-inside: avoid;">
+                        <!-- Line and Dot -->
+                        <div class="relative flex flex-col items-center w-6 shrink-0 h-full">
+                            <div class="w-4 h-4 rounded-full mt-1.5 z-10" style="background-color: ${color}; outline: 3px solid white; box-shadow: 0 0 0 4px ${color}20;"></div>
+                            ${!isLast ? `<div class="w-0.5 bg-slate-200 absolute top-6 bottom-[-24px] z-0"></div>` : ''}
+                        </div>
                         
-                        <!-- Tooltip on hover -->
-                        <div class="absolute bottom-full start-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] bg-slate-800 text-white text-xs p-2 rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none z-10 transition-opacity">
-                            <strong>${item.title}</strong><br>
-                            ${item._calculatedStart} - ${item._calculatedEnd} (${item.duration}m)<br>
-                            ${item.desc ? `<span class="text-slate-300 mt-1 block">${item.desc}</span>` : ''}
+                        <!-- Content Card -->
+                        <div class="flex-1 bg-white border border-slate-100 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
+                                <h4 class="font-bold text-slate-800 text-lg">${item.title || t('session')}</h4>
+                                <span class="text-xs sm:text-sm font-semibold text-slate-600 bg-slate-50 border border-slate-100 px-2 py-1 rounded w-fit shrink-0" dir="ltr">${item._calculatedStart} - ${item._calculatedEnd} (${item.duration}m)</span>
+                            </div>
+                            ${item.desc ? `<p class="text-slate-500 text-sm whitespace-pre-wrap mt-2 leading-relaxed">${item.desc}</p>` : ''}
                         </div>
                     </div>
                 `;
             }).join('');
 
             return `
-                <div class="timeline-day">
-                    <h3 class="text-lg font-bold text-slate-700 mb-4 flex items-center gap-3">
-                        <span class="bg-primary/10 text-primary px-3 py-1 rounded-md text-sm">${t('day')} ${index + 1}</span>
-                        ${day.title}
-                        <span class="text-sm font-normal text-slate-400 ms-auto">${day.startTime} - ${day.endTime}</span>
-                    </h3>
+                <div class="timeline-day page-break-inside-avoid" style="page-break-inside: avoid;">
+                    <div class="flex flex-wrap items-center gap-3 border-b-2 border-slate-100 pb-4 mb-6">
+                        <span class="bg-primary text-white px-3 py-1 rounded-md text-sm font-bold shadow-sm">${t('day')} ${index + 1}</span>
+                        <h3 class="text-xl font-bold text-slate-800">${day.title}</h3>
+                        <span class="text-sm font-semibold text-slate-400 ms-auto bg-slate-50 px-3 py-1 rounded-full border border-slate-200" dir="ltr">
+                            ${day.startTime} - ${day.endTime}
+                        </span>
+                    </div>
                     
-                    <div class="w-full h-20 sm:h-24 bg-slate-100 rounded-lg overflow-visible flex shadow-inner relative border border-slate-200">
-                        ${day.items.length > 0 ? blocks : `<div class="w-full h-full flex items-center justify-center text-slate-400 text-sm">${t('dragDropEmpty')}</div>`}
+                    <!-- Proportional Bar -->
+                    <div class="w-full h-5 sm:h-6 bg-slate-100 rounded-full overflow-hidden flex shadow-inner mb-8 border border-slate-200">
+                        ${day.items.length > 0 ? barBlocks : `<div class="w-full h-full flex items-center justify-center text-slate-400 text-xs">...</div>`}
+                    </div>
+
+                    <!-- Vertical Detailed Nodes -->
+                    <div class="relative ms-1 sm:ms-2">
+                        ${listItems}
                     </div>
                 </div>
             `;
@@ -525,16 +537,13 @@
 
         const attachInputListeners = () => {
             if (state.tab !== 'builder') return;
-
             const container = document.getElementById('days-container');
             if(!container) return;
 
-            // Handle real-time text input (update state without full render to preserve focus)
             container.addEventListener('input', (e) => {
                 const target = e.target;
                 const dayId = target.dataset.dayId;
                 const itemId = target.dataset.itemId;
-                
                 const day = state.days.find(d => d.id === dayId);
                 let item = itemId ? day.items.find(i => i.id === itemId) : null;
 
@@ -547,12 +556,10 @@
                 }
             });
 
-            // Handle structure-changing inputs (requires recalculation and re-render)
             container.addEventListener('change', (e) => {
                 const target = e.target;
                 const dayId = target.dataset.dayId;
                 const itemId = target.dataset.itemId;
-                
                 const day = state.days.find(d => d.id === dayId);
                 let item = itemId ? day.items.find(i => i.id === itemId) : null;
 
@@ -564,12 +571,12 @@
                 
                 if (item) {
                     if (target.classList.contains('item-duration-input')) { item.duration = parseInt(target.value) || 0; needsRender = true; }
+                    if (target.classList.contains('item-color-input')) { item.color = target.value; needsRender = true; }
                     if (target.classList.contains('item-type-select')) { 
                         item.type = target.value; 
-                        item.color = defaultColors[item.type]; // Reset to default color for new type
+                        item.color = defaultColors[item.type]; // Reset color to default for new type
                         needsRender = true; 
                     }
-                    if (target.classList.contains('item-color-input')) { item.color = target.value; needsRender = true; }
                 }
 
                 if(needsRender) renderApp();
@@ -578,12 +585,11 @@
 
         // --- Actions ---
         const addDay = () => {
-            const num = state.days.length + 1;
             state.days.push({
                 id: generateId(),
-                title: `${t('day')} ${num}`,
+                title: `${t('day')} ${state.days.length + 1}`,
                 startTime: "09:00",
-                endTime: "17:00",
+                endTime: "16:00",
                 autoAdjust: false,
                 items: []
             });
@@ -616,7 +622,7 @@
             renderApp();
         };
 
-        // --- 6. Import/Export ---
+        // --- 6. Import/Export Data ---
         const exportJSON = () => {
             state.title = document.getElementById('project-title').value;
             const dataStr = JSON.stringify(state, null, 2);
@@ -637,109 +643,116 @@
             reader.onload = (event) => {
                 try {
                     const data = JSON.parse(event.target.result);
-                    if(data.days) {
-                        state = data;
-                        renderApp();
-                        showToast(t('imported'));
-                    }
+                    if(data.days) { state = data; renderApp(); showToast(t('imported')); }
                 } catch (err) { alert("Invalid JSON"); }
             };
             reader.readAsText(file);
-            e.target.value = ''; // Reset
+            e.target.value = '';
         };
 
-        // --- 7. PDF Generation ---
+        // --- 7. PDF Generators ---
+        const getPdfContainer = () => {
+            let container = document.getElementById('pdf-hidden-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'pdf-hidden-container';
+                // Move off-screen but keep layout computed
+                container.style.position = 'absolute';
+                container.style.top = '-9999px';
+                container.style.width = '800px'; 
+                container.style.backgroundColor = '#ffffff';
+                document.body.appendChild(container);
+            }
+            return container;
+        };
+
+        // PDF 1: Syllabus (Table format)
         const generateSyllabusHTML = () => {
+            recalculateTimings();
             let html = `
-                <div style="font-family: ${state.lang === 'ar' ? "'Cairo', sans-serif" : "'Inter', sans-serif"}; direction: ${state.lang === 'ar' ? 'rtl' : 'ltr'}; color: #333; max-width: 800px; margin: 0 auto; padding: 40px;">
+                <div style="font-family: ${state.lang === 'ar' ? "'Cairo', sans-serif" : "'Inter', sans-serif"}; direction: ${state.lang === 'ar' ? 'rtl' : 'ltr'}; color: #333; padding: 40px;">
                     <div style="text-align: center; margin-bottom: 40px; border-bottom: 2px solid #4f46e5; padding-bottom: 20px;">
-                        <h1 style="color: #1e293b; margin: 0 0 10px 0; font-size: 28px;">${state.title}</h1>
-                        <p style="color: #64748b; margin: 0; font-size: 16px;">Syllabus / المنهج</p>
+                        <h1 style="color: #1e293b; margin: 0 0 10px 0; font-size: 28px;">${state.title || t('appTitle')}</h1>
+                        <p style="color: #64748b; margin: 0; font-size: 16px;">Syllabus</p>
                     </div>
             `;
 
             state.days.forEach((day, index) => {
                 html += `
                     <div style="margin-bottom: 40px; page-break-inside: avoid;">
-                        <h2 style="color: #4f46e5; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 15px; font-size: 20px; display: flex; justify-content: space-between;">
+                        <h2 style="color: #4f46e5; border-bottom: 2px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 15px; font-size: 20px; display: flex; justify-content: space-between;">
                             <span>${t('day')} ${index + 1}: ${day.title}</span>
                             <span style="font-size: 14px; color: #64748b; font-weight: normal;">${day.startTime} - ${day.endTime}</span>
                         </h2>
                         <table style="width: 100%; border-collapse: collapse; font-size: 14px; text-align: ${state.lang === 'ar' ? 'right' : 'left'};">
                             <thead>
                                 <tr style="background-color: #f8fafc;">
-                                    <th style="padding: 10px; border-bottom: 2px solid #e2e8f0; width: 120px; color:#475569;">${t('startTime')}</th>
-                                    <th style="padding: 10px; border-bottom: 2px solid #e2e8f0; color:#475569;">Details</th>
+                                    <th style="padding: 12px; border-bottom: 2px solid #e2e8f0; width: 120px; color:#475569;">${t('startTime')}</th>
+                                    <th style="padding: 12px; border-bottom: 2px solid #e2e8f0; color:#475569;">Details</th>
                                 </tr>
                             </thead>
                             <tbody>
                 `;
 
                 day.items.forEach(item => {
-                    const isBreak = item.type === 'break';
                     const color = item.color || defaultColors[item.type];
-                    
+                    const bg = item.type === 'break' ? '#fef9c3' : '#ffffff';
                     html += `
-                        <tr style="background-color: ${isBreak ? '#fef3c7' : '#ffffff'}; border-bottom: 1px solid #e2e8f0; page-break-inside: avoid;">
-                            <td style="padding: 12px 10px; vertical-align: top; white-space: nowrap; border-inline-start: 4px solid ${color};">
+                        <tr style="background-color: ${bg}; border-bottom: 1px solid #e2e8f0; page-break-inside: avoid;">
+                            <td style="padding: 12px; vertical-align: top; white-space: nowrap; border-inline-start: 4px solid ${color};">
                                 <strong style="color: #334155;">${item._calculatedStart}</strong><br>
                                 <span style="color: #94a3b8; font-size: 12px;">${item.duration}m</span>
                             </td>
-                            <td style="padding: 12px 10px; vertical-align: top;">
+                            <td style="padding: 12px; vertical-align: top;">
                                 <div style="font-weight: bold; color: #1e293b; margin-bottom: 4px; font-size: 15px;">${item.title || 'Untitled'}</div>
-                                ${item.desc ? `<div style="color: #64748b; line-height: 1.4; white-space: pre-wrap;">${item.desc}</div>` : ''}
+                                ${item.desc ? `<div style="color: #64748b; line-height: 1.5; white-space: pre-wrap;">${item.desc}</div>` : ''}
                             </td>
                         </tr>
                     `;
                 });
-
                 html += `</tbody></table></div>`;
             });
-
             html += `</div>`;
             return html;
         };
 
         const exportSyllabusPDF = () => {
             showToast(t('pdfGen'));
-            const container = document.getElementById('pdf-container');
+            state.title = document.getElementById('project-title').value;
+            const container = getPdfContainer();
             container.innerHTML = generateSyllabusHTML();
-            container.style.display = 'block';
 
             const opt = {
-                margin: 0,
+                margin: 0.5,
                 filename: `Syllabus_${state.title.replace(/\s+/g, '_')}.pdf`,
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2, useCORS: true },
                 jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
             };
 
-            html2pdf().set(opt).from(container).save().then(() => {
-                container.style.display = 'none';
-                container.innerHTML = '';
-            });
+            html2pdf().set(opt).from(container).save().then(() => container.innerHTML = '');
         };
 
+        // PDF 2: Timeline (Visual format)
         const exportTimelinePDF = () => {
             showToast(t('pdfGen'));
-            const element = document.getElementById('timeline-export-area');
-            
-            // Temporarily hide tooltips for PDF rendering to avoid visual glitches
-            const tooltips = element.querySelectorAll('.absolute');
-            tooltips.forEach(t => t.style.display = 'none');
+            state.title = document.getElementById('project-title').value;
+            const container = getPdfContainer();
+            // Wrap the generated timeline in a padded container to look good on PDF
+            container.innerHTML = `<div style="padding: 40px; background: white;">${generateTimelineHTML(true)}</div>`;
+
+            // Since it relies on tailwind classes and icons, make sure we render icons in the hidden container
+            lucide.createIcons({ root: container });
 
             const opt = {
                 margin: 0.5,
                 filename: `Timeline_${state.title.replace(/\s+/g, '_')}.pdf`,
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-                jsPDF: { unit: 'in', format: 'landscape', orientation: 'landscape' }
+                jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
             };
 
-            html2pdf().set(opt).from(element).save().then(() => {
-                // Restore tooltips
-                tooltips.forEach(t => t.style.display = '');
-            });
+            html2pdf().set(opt).from(container).save().then(() => container.innerHTML = '');
         };
 
         // --- Initialize ---
@@ -747,10 +760,7 @@
             document.documentElement.dir = state.lang === 'ar' ? 'rtl' : 'ltr';
             renderApp();
         });
-
     </script>
 </body>
 </html>
-
-
 
