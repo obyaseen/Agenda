@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Agenda Builder | منشئ جدول الأعمال</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- SortableJS for Drag and Drop -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    
+    <!-- html2pdf for PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4f46e5', // Indigo 600
+                        secondary: '#0ea5e9', // Sky 500
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Inter:wght@400;500;600&display=swap');
+
+        :root {
+            --font-en: 'Inter', sans-serif;
+            --font-ar: 'Cairo', sans-serif;
+        }
+
+        body[dir="ltr"] { font-family: var(--font-en); }
+        body[dir="rtl"] { font-family: var(--font-ar); }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .drag-handle { cursor: grab; }
+        .drag-handle:active { cursor: grabbing; }
+        .sortable-ghost { opacity: 0.4; background-color: #f8fafc; border: 2px dashed #cbd5e1; }
+        .sortable-drag { cursor: grabbing !important; }
+        
+        /* Hide number input arrows */
+        input[type="number"]::-webkit-inner-spin-button, 
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type="number"] { -moz-appearance: textfield; }
+
+        input[type="color"] {
+            -webkit-appearance: none;
+            border: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            padding: 0;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: 1px solid #cbd5e1; border-radius: 4px; }
+
+        .timeline-block { transition: width 0.3s ease; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 selection:bg-primary selection:text-white transition-all duration-300">
+
+    <div id="app"></div>
+
+    <!-- Hidden container for PDF Generation -->
+    <div id="pdf-container" class="hidden"></div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-4 end-4 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center gap-3 z-50">
+        <i data-lucide="info" class="w-5 h-5 text-secondary"></i>
+        <span id="toast-msg">Notification</span>
+    </div>
+
+    <script>
+        // --- 1. Translations & Utilities ---
+        const dict = {
+            en: {
+                appTitle: "Project Title",
+                import: "Import",
+                exportJson: "Export JSON",
+                exportSyllabus: "Export Syllabus PDF",
+                exportTimeline: "Export Timeline PDF",
+                tabBuilder: "Agenda Builder",
+                tabTimeline: "Timeline View",
+                addDay: "Add Day",
+                day: "Day",
+                startTime: "Start Time",
+                endTime: "End Time",
+                autoAdjust: "Auto-adjust session durations to fit End Time",
+                addSession: "Add Session",
+                addBreak: "Add Break",
+                session: "Session",
+                break: "Break",
+                logistic: "Logistic",
+                titlePlaceholder: "Session Title",
+                descPlaceholder: "Add description...",
+                duration: "Duration (min)",
+                to: "to",
+                deleteConfirm: "Are you sure you want to delete this day?",
+                imported: "Data imported successfully.",
+                exported: "File exported.",
+                pdfGen: "Generating PDF...",
+                dragDropEmpty: "Drag items here or add new ones"
+            },
+            ar: {
+                appTitle: "عنوان المشروع",
+                import: "استيراد",
+                exportJson: "تصدير JSON",
+                exportSyllabus: "تصدير المنهج PDF",
+                exportTimeline: "تصدير المخطط الزمني PDF",
+                tabBuilder: "باني الجدول",
+                tabTimeline: "العرض الزمني",
+                addDay: "إضافة يوم",
+                day: "يوم",
+                startTime: "وقت البدء",
+                endTime: "وقت الانتهاء",
+                autoAdjust: "ضبط مدة الجلسات تلقائياً لتناسب وقت الانتهاء",
+                addSession: "إضافة جلسة",
+                addBreak: "إضافة استراحة",
+                session: "جلسة",
+                break: "استراحة",
+                logistic: "لوجستي",
+                titlePlaceholder: "عنوان الجلسة",
+                descPlaceholder: "إضافة وصف...",
+                duration: "المدة (دقائق)",
+                to: "إلى",
+                deleteConfirm: "هل أنت متأكد من حذف هذا اليوم؟",
+                imported: "تم استيراد البيانات بنجاح.",
+                exported: "تم تصدير الملف.",
+                pdfGen: "جاري إنشاء PDF...",
+                dragDropEmpty: "اسحب العناصر هنا أو أضف عناصر جديدة"
+            }
+        };
+
+        const generateId = () => Math.random().toString(36).substr(2, 9);
+        const t = (key) => dict[state.lang][key];
+
+        const showToast = (message) => {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').textContent = message;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
+        };
+
+        const timeToMins = (time) => {
+            if (!time) return 0;
+            const [h, m] = time.split(':').map(Number);
+            return (h * 60) + m;
+        };
+
+        const minsToTime = (mins) => {
+            const h = Math.floor(mins / 60).toString().padStart(2, '0');
+            const m = Math.floor(mins % 60).toString().padStart(2, '0');
+            return `${h}:${m}`;
+        };
+
+        const defaultColors = {
+            session: '#4f46e5', // Indigo
+            break: '#f59e0b',   // Amber
+            logistic: '#64748b' // Slate
+        };
+
+        // --- 2. State Management ---
+        let state = {
+            lang: 'en',
+            tab: 'builder', // 'builder' or 'timeline'
+            title: "Executive Leadership Program",
+            days: [
+                {
+                    id: generateId(),
+                    title: "Vision & Strategy",
+                    startTime: "09:00",
+                    endTime: "16:00",
+                    autoAdjust: false,
+                    items: [
+                        { id: generateId(), title: "Registration & Breakfast", type: "logistic", duration: 30, desc: "Welcome packets in lobby.", color: defaultColors.logistic },
+                        { id: generateId(), title: "Opening Keynote", type: "session", duration: 90, desc: "Setting the stage for the week.", color: defaultColors.session },
+                        { id: generateId(), title: "Coffee Break", type: "break", duration: 15, desc: "Networking.", color: defaultColors.break },
+                        { id: generateId(), title: "Strategic Frameworks", type: "session", duration: 120, desc: "Interactive workshop.", color: defaultColors.session },
+                        { id: generateId(), title: "Lunch", type: "break", duration: 60, desc: "Catered lunch.", color: defaultColors.break }
+                    ]
+                }
+            ]
+        };
+
+        let sortableInstances = [];
+
+        // --- 3. Core Logic (Time Calculation) ---
+        const recalculateTimings = () => {
+            state.days.forEach(day => {
+                let startMins = timeToMins(day.startTime);
+                let endMins = timeToMins(day.endTime);
+
+                if (day.autoAdjust && startMins < endMins) {
+                    // Auto-adjust sessions to fit within start and end time
+                    const totalAvailableMins = endMins - startMins;
+                    
+                    // Fixed items (breaks, logistics) keep their duration
+                    const fixedItems = day.items.filter(i => i.type !== 'session');
+                    const flexItems = day.items.filter(i => i.type === 'session');
+                    
+                    const fixedMins = fixedItems.reduce((sum, i) => sum + (Number(i.duration) || 0), 0);
+                    const remainingMins = Math.max(0, totalAvailableMins - fixedMins);
+                    
+                    // Distribute equally among flexible sessions
+                    const flexDuration = flexItems.length > 0 ? Math.floor(remainingMins / flexItems.length) : 0;
+                    
+                    // Apply calculated durations
+                    flexItems.forEach(i => i.duration = flexDuration);
+                    
+                    // Handle remainder (give extra minutes to the last session to perfectly align)
+                    if (flexItems.length > 0 && remainingMins % flexItems.length !== 0) {
+                        flexItems[flexItems.length - 1].duration += (remainingMins % flexItems.length);
+                    }
+                }
+
+                // Calculate visual Start/End times for each block
+                let currentMins = startMins;
+                day.items.forEach(item => {
+                    item._calculatedStart = minsToTime(currentMins);
+                    currentMins += Number(item.duration) || 0;
+                    item._calculatedEnd = minsToTime(currentMins);
+                });
+
+                // If NOT auto-adjusting, the day's end time is dictated by the items
+                if (!day.autoAdjust) {
+                    day.endTime = minsToTime(currentMins);
+                }
+                
+                day._totalDuration = currentMins - startMins;
+            });
+        };
+
+        // --- 4. Render Engine ---
+        const toggleLang = () => {
+            state.lang = state.lang === 'en' ? 'ar' : 'en';
+            document.documentElement.dir = state.lang === 'ar' ? 'rtl' : 'ltr';
+            renderApp();
+        };
+
+        const renderApp = () => {
+            recalculateTimings();
+            
+            const app = document.getElementById('app');
+            app.innerHTML = `
+                <!-- Header -->
+                <header class="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div class="flex items-center gap-3 w-full md:w-auto">
+                            <div class="bg-primary p-2 rounded-lg text-white shrink-0">
+                                <i data-lucide="calendar-clock"></i>
+                            </div>
+                            <input type="text" id="project-title" value="${state.title}" class="text-xl md:text-2xl font-bold bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none transition-colors w-full md:w-80" placeholder="${t('appTitle')}">
+                        </div>
+                        
+                        <div class="flex flex-wrap items-center gap-2 text-sm justify-center">
+                            <button onclick="toggleLang()" class="px-3 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md font-medium">
+                                ${state.lang === 'en' ? 'عربي' : 'English'}
+                            </button>
+                            <input type="file" id="import-file" accept=".json" class="hidden" onchange="importJSON(event)">
+                            <button onclick="document.getElementById('import-file').click()" class="flex items-center gap-2 px-3 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors">
+                                <i data-lucide="upload" class="w-4 h-4"></i> <span class="hidden sm:inline">${t('import')}</span>
+                            </button>
+                            <button onclick="exportJSON()" class="flex items-center gap-2 px-3 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors">
+                                <i data-lucide="download" class="w-4 h-4"></i> <span class="hidden sm:inline">${t('exportJson')}</span>
+                            </button>
+                            ${state.tab === 'builder' ? `
+                            <button onclick="exportSyllabusPDF()" class="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-indigo-700 text-white rounded-md shadow-sm transition-colors font-medium">
+                                <i data-lucide="file-text" class="w-4 h-4"></i> <span class="hidden sm:inline">${t('exportSyllabus')}</span>
+                            </button>` : `
+                            <button onclick="exportTimelinePDF()" class="flex items-center gap-2 px-4 py-2 bg-secondary hover:bg-sky-600 text-white rounded-md shadow-sm transition-colors font-medium">
+                                <i data-lucide="bar-chart-horizontal" class="w-4 h-4"></i> <span class="hidden sm:inline">${t('exportTimeline')}</span>
+                            </button>`}
+                        </div>
+                    </div>
+                    
+                    <!-- Tabs -->
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-6 border-t border-slate-100 mt-2">
+                        <button onclick="switchTab('builder')" class="py-3 px-1 border-b-2 font-medium text-sm transition-colors ${state.tab === 'builder' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}">
+                            <div class="flex items-center gap-2"><i data-lucide="layout-list" class="w-4 h-4"></i> ${t('tabBuilder')}</div>
+                        </button>
+                        <button onclick="switchTab('timeline')" class="py-3 px-1 border-b-2 font-medium text-sm transition-colors ${state.tab === 'timeline' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}">
+                            <div class="flex items-center gap-2"><i data-lucide="gantt-chart" class="w-4 h-4"></i> ${t('tabTimeline')}</div>
+                        </button>
+                    </div>
+                </header>
+
+                <!-- Main Content -->
+                <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" id="main-content">
+                    ${state.tab === 'builder' ? renderBuilder() : renderTimeline()}
+                </main>
+            `;
+
+            lucide.createIcons();
+            if (state.tab === 'builder') initSortables();
+            attachInputListeners();
+        };
+
+        const switchTab = (tab) => {
+            state.title = document.getElementById('project-title').value; // Save title
+            state.tab = tab;
+            renderApp();
+        };
+
+        // --- Render: Builder Tab ---
+        const renderBuilder = () => {
+            return `
+                <div class="flex justify-end mb-6">
+                    <button onclick="addDay()" class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 hover:border-primary hover:text-primary text-slate-700 rounded-md shadow-sm transition-colors font-medium">
+                        <i data-lucide="plus-circle" class="w-4 h-4"></i> ${t('addDay')}
+                    </button>
+                </div>
+                <div id="days-container" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
+                    ${state.days.map((day, index) => renderDay(day, index)).join('')}
+                </div>
+            `;
+        };
+
+        const renderDay = (day, index) => {
+            return `
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full max-h-[85vh]">
+                    <!-- Day Header -->
+                    <div class="bg-slate-50 p-4 border-b border-slate-200 sticky top-0 z-10">
+                        <div class="flex justify-between items-start mb-3">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="bg-primary/10 text-primary text-xs font-bold px-2 py-1 rounded whitespace-nowrap">${t('day')} ${index + 1}</span>
+                                    <input type="text" class="font-bold text-lg text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none w-full day-title-input" value="${day.title}" data-day-id="${day.id}">
+                                </div>
+                            </div>
+                            <button class="text-slate-400 hover:text-red-500 p-1 ms-2" onclick="deleteDay('${day.id}')">
+                                <i data-lucide="x" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4 bg-white p-3 rounded-lg border border-slate-200 mb-3 text-sm">
+                            <div>
+                                <label class="block text-xs text-slate-500 mb-1">${t('startTime')}</label>
+                                <input type="time" class="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 focus:outline-none focus:border-primary day-start-input" value="${day.startTime}" data-day-id="${day.id}">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-500 mb-1">${t('endTime')} ${!day.autoAdjust ? '(Auto)' : ''}</label>
+                                <input type="time" class="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 focus:outline-none focus:border-primary day-end-input" value="${day.endTime}" data-day-id="${day.id}" ${!day.autoAdjust ? 'readonly disabled class="opacity-60"' : ''}>
+                            </div>
+                        </div>
+                        
+                        <label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer p-1 hover:bg-slate-100 rounded">
+                            <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary day-auto-checkbox" data-day-id="${day.id}" ${day.autoAdjust ? 'checked' : ''}>
+                            ${t('autoAdjust')}
+                        </label>
+                    </div>
+
+                    <!-- Items List -->
+                    <div class="p-4 flex-1 overflow-y-auto sortable-list" data-day-id="${day.id}">
+                        ${day.items.length === 0 ? `<div class="p-8 text-center text-slate-400 text-sm border-2 border-dashed border-slate-200 rounded-lg">${t('dragDropEmpty')}</div>` : day.items.map(item => renderItem(day, item)).join('')}
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="p-4 border-t border-slate-100 bg-slate-50 flex gap-2">
+                        <button onclick="addItem('${day.id}', 'session')" class="flex-1 flex justify-center items-center gap-1 py-2 bg-white border border-slate-200 hover:border-primary hover:text-primary rounded-md text-sm font-medium text-slate-600 transition-colors shadow-sm">
+                            <i data-lucide="plus" class="w-4 h-4"></i> ${t('addSession')}
+                        </button>
+                        <button onclick="addItem('${day.id}', 'break')" class="flex-1 flex justify-center items-center gap-1 py-2 bg-white border border-slate-200 hover:border-amber-500 hover:text-amber-600 rounded-md text-sm font-medium text-slate-600 transition-colors shadow-sm">
+                            <i data-lucide="coffee" class="w-4 h-4"></i> ${t('addBreak')}
+                        </button>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderItem = (day, item) => {
+            const isAutoCalculated = day.autoAdjust && item.type === 'session';
+            
+            return `
+                <div class="group relative bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md transition-all mb-3 overflow-hidden border-s-4" style="border-inline-start-color: ${item.color || defaultColors[item.type]}" data-item-id="${item.id}">
+                    <div class="p-3 flex items-start gap-2 sm:gap-3">
+                        <div class="drag-handle mt-1 text-slate-300 hover:text-slate-500 p-1 shrink-0">
+                            <i data-lucide="grip-vertical" class="w-5 h-5"></i>
+                        </div>
+
+                        <!-- Timing -->
+                        <div class="flex flex-col items-center justify-center min-w-[60px] sm:min-w-[70px] mt-1 shrink-0">
+                            <span class="text-sm font-semibold text-slate-700">${item._calculatedStart}</span>
+                            <span class="text-[10px] sm:text-xs text-slate-400 leading-none my-0.5">${t('to')}</span>
+                            <span class="text-sm font-semibold text-slate-600">${item._calculatedEnd}</span>
+                        </div>
+
+                        <!-- Content -->
+                        <div class="flex-1 min-w-0">
+                            <div class="flex flex-wrap items-center gap-2 mb-1">
+                                <input type="text" class="font-medium text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none w-full sm:flex-1 text-sm sm:text-base item-title-input" value="${item.title}" placeholder="${t('titlePlaceholder')}" data-day-id="${day.id}" data-item-id="${item.id}">
+                                
+                                <div class="flex items-center gap-1 w-full sm:w-auto">
+                                    <input type="color" value="${item.color || defaultColors[item.type]}" class="item-color-input" data-day-id="${day.id}" data-item-id="${item.id}" title="Color">
+                                    <select class="text-xs rounded border border-slate-200 bg-slate-50 text-slate-600 px-1 py-1 focus:outline-none focus:border-primary item-type-select" data-day-id="${day.id}" data-item-id="${item.id}">
+                                        <option value="session" ${item.type === 'session' ? 'selected' : ''}>${t('session')}</option>
+                                        <option value="break" ${item.type === 'break' ? 'selected' : ''}>${t('break')}</option>
+                                        <option value="logistic" ${item.type === 'logistic' ? 'selected' : ''}>${t('logistic')}</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <textarea class="text-xs sm:text-sm text-slate-500 bg-transparent border border-transparent hover:border-slate-200 focus:border-primary rounded p-1 focus:outline-none w-full resize-none item-desc-input" rows="1" placeholder="${t('descPlaceholder')}" data-day-id="${day.id}" data-item-id="${item.id}">${item.desc || ''}</textarea>
+                        </div>
+
+                        <!-- Duration & Actions -->
+                        <div class="flex flex-col items-end gap-2 shrink-0">
+                            <div class="flex items-center bg-slate-50 border border-slate-200 rounded-md overflow-hidden ${isAutoCalculated ? 'opacity-60 bg-slate-100' : ''}" title="${isAutoCalculated ? 'Calculated automatically' : t('duration')}">
+                                <input type="number" class="w-12 sm:w-14 text-center py-1 text-xs sm:text-sm font-medium focus:outline-none focus:bg-white item-duration-input" value="${item.duration}" min="0" data-day-id="${day.id}" data-item-id="${item.id}" ${isAutoCalculated ? 'readonly tabindex="-1"' : ''}>
+                                <span class="px-1 sm:px-2 text-[10px] sm:text-xs text-slate-500 bg-slate-100 border-s border-slate-200 py-1.5">m</span>
+                            </div>
+                            <button onclick="deleteItem('${day.id}', '${item.id}')" class="text-slate-300 hover:text-red-500 transition-colors p-1 rounded hover:bg-red-50">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        // --- Render: Timeline Tab ---
+        const renderTimeline = () => {
+            return `
+                <div id="timeline-export-area" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-8">
+                    <div class="text-center mb-10 border-b border-slate-200 pb-6">
+                        <h2 class="text-3xl font-bold text-slate-800 mb-2">${state.title || t('appTitle')}</h2>
+                        <p class="text-slate-500 flex items-center justify-center gap-2">
+                            <i data-lucide="clock" class="w-4 h-4"></i> ${t('tabTimeline')}
+                        </p>
+                    </div>
+
+                    <div class="space-y-12">
+                        ${state.days.map((day, index) => renderTimelineDay(day, index)).join('')}
+                    </div>
+                    
+                    <div class="mt-12 pt-6 border-t border-slate-200 flex justify-center gap-6 text-sm text-slate-600">
+                        <div class="flex items-center gap-2"><div class="w-4 h-4 rounded" style="background-color: ${defaultColors.session}"></div> ${t('session')}</div>
+                        <div class="flex items-center gap-2"><div class="w-4 h-4 rounded" style="background-color: ${defaultColors.break}"></div> ${t('break')}</div>
+                        <div class="flex items-center gap-2"><div class="w-4 h-4 rounded" style="background-color: ${defaultColors.logistic}"></div> ${t('logistic')}</div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderTimelineDay = (day, index) => {
+            const totalMins = day._totalDuration > 0 ? day._totalDuration : 1; // Prevent div by 0
+            
+            // Build the visual blocks
+            const blocks = day.items.map(item => {
+                const widthPercent = Math.max(2, (item.duration / totalMins) * 100); // min 2% width
+                const color = item.color || defaultColors[item.type];
+                
+                return `
+                    <div class="relative h-full border-e border-white/20 group timeline-block flex flex-col justify-center px-2 hover:opacity-90 transition-opacity" style="width: ${widthPercent}%; background-color: ${color};" title="${item.title} (${item._calculatedStart} - ${item._calculatedEnd})">
+                        <div class="text-white text-xs font-bold truncate">${item._calculatedStart}</div>
+                        <div class="text-white/90 text-[10px] sm:text-xs truncate font-medium mt-0.5 leading-tight whitespace-nowrap overflow-hidden text-ellipsis">${item.title}</div>
+                        
+                        <!-- Tooltip on hover -->
+                        <div class="absolute bottom-full start-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] bg-slate-800 text-white text-xs p-2 rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none z-10 transition-opacity">
+                            <strong>${item.title}</strong><br>
+                            ${item._calculatedStart} - ${item._calculatedEnd} (${item.duration}m)<br>
+                            ${item.desc ? `<span class="text-slate-300 mt-1 block">${item.desc}</span>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="timeline-day">
+                    <h3 class="text-lg font-bold text-slate-700 mb-4 flex items-center gap-3">
+                        <span class="bg-primary/10 text-primary px-3 py-1 rounded-md text-sm">${t('day')} ${index + 1}</span>
+                        ${day.title}
+                        <span class="text-sm font-normal text-slate-400 ms-auto">${day.startTime} - ${day.endTime}</span>
+                    </h3>
+                    
+                    <div class="w-full h-20 sm:h-24 bg-slate-100 rounded-lg overflow-visible flex shadow-inner relative border border-slate-200">
+                        ${day.items.length > 0 ? blocks : `<div class="w-full h-full flex items-center justify-center text-slate-400 text-sm">${t('dragDropEmpty')}</div>`}
+                    </div>
+                </div>
+            `;
+        };
+
+        // --- 5. Event Listeners & Interactions ---
+        const initSortables = () => {
+            sortableInstances.forEach(s => s.destroy());
+            sortableInstances = [];
+
+            document.querySelectorAll('.sortable-list').forEach(listEl => {
+                const sortable = Sortable.create(listEl, {
+                    group: 'agenda-items',
+                    animation: 150,
+                    handle: '.drag-handle',
+                    ghostClass: 'sortable-ghost',
+                    dragClass: 'sortable-drag',
+                    onEnd: function (evt) {
+                        const fromDayId = evt.from.dataset.dayId;
+                        const toDayId = evt.to.dataset.dayId;
+                        const oldIndex = evt.oldIndex;
+                        const newIndex = evt.newIndex;
+
+                        const fromDay = state.days.find(d => d.id === fromDayId);
+                        const item = fromDay.items.splice(oldIndex, 1)[0];
+
+                        const toDay = state.days.find(d => d.id === toDayId);
+                        toDay.items.splice(newIndex, 0, item);
+
+                        renderApp();
+                    }
+                });
+                sortableInstances.push(sortable);
+            });
+        };
+
+        const attachInputListeners = () => {
+            if (state.tab !== 'builder') return;
+
+            const container = document.getElementById('days-container');
+            if(!container) return;
+
+            // Handle real-time text input (update state without full render to preserve focus)
+            container.addEventListener('input', (e) => {
+                const target = e.target;
+                const dayId = target.dataset.dayId;
+                const itemId = target.dataset.itemId;
+                
+                const day = state.days.find(d => d.id === dayId);
+                let item = itemId ? day.items.find(i => i.id === itemId) : null;
+
+                if (target.classList.contains('day-title-input')) day.title = target.value;
+                if (target.classList.contains('item-title-input')) item.title = target.value;
+                if (target.classList.contains('item-desc-input')) {
+                    item.desc = target.value;
+                    target.style.height = 'auto';
+                    target.style.height = (target.scrollHeight) + 'px';
+                }
+            });
+
+            // Handle structure-changing inputs (requires recalculation and re-render)
+            container.addEventListener('change', (e) => {
+                const target = e.target;
+                const dayId = target.dataset.dayId;
+                const itemId = target.dataset.itemId;
+                
+                const day = state.days.find(d => d.id === dayId);
+                let item = itemId ? day.items.find(i => i.id === itemId) : null;
+
+                let needsRender = false;
+
+                if (target.classList.contains('day-start-input')) { day.startTime = target.value; needsRender = true; }
+                if (target.classList.contains('day-end-input')) { day.endTime = target.value; needsRender = true; }
+                if (target.classList.contains('day-auto-checkbox')) { day.autoAdjust = target.checked; needsRender = true; }
+                
+                if (item) {
+                    if (target.classList.contains('item-duration-input')) { item.duration = parseInt(target.value) || 0; needsRender = true; }
+                    if (target.classList.contains('item-type-select')) { 
+                        item.type = target.value; 
+                        item.color = defaultColors[item.type]; // Reset to default color for new type
+                        needsRender = true; 
+                    }
+                    if (target.classList.contains('item-color-input')) { item.color = target.value; needsRender = true; }
+                }
+
+                if(needsRender) renderApp();
+            });
+        };
+
+        // --- Actions ---
+        const addDay = () => {
+            const num = state.days.length + 1;
+            state.days.push({
+                id: generateId(),
+                title: `${t('day')} ${num}`,
+                startTime: "09:00",
+                endTime: "17:00",
+                autoAdjust: false,
+                items: []
+            });
+            renderApp();
+        };
+
+        const deleteDay = (id) => {
+            if(confirm(t('deleteConfirm'))) {
+                state.days = state.days.filter(d => d.id !== id);
+                renderApp();
+            }
+        };
+
+        const addItem = (dayId, type) => {
+            const day = state.days.find(d => d.id === dayId);
+            day.items.push({
+                id: generateId(),
+                title: type === 'session' ? t('session') : t('break'),
+                type: type,
+                duration: type === 'session' ? 60 : 15,
+                desc: "",
+                color: defaultColors[type]
+            });
+            renderApp();
+        };
+
+        const deleteItem = (dayId, itemId) => {
+            const day = state.days.find(d => d.id === dayId);
+            day.items = day.items.filter(i => i.id !== itemId);
+            renderApp();
+        };
+
+        // --- 6. Import/Export ---
+        const exportJSON = () => {
+            state.title = document.getElementById('project-title').value;
+            const dataStr = JSON.stringify(state, null, 2);
+            const blob = new Blob([dataStr], {type: "application/json"});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Agenda_${state.title.replace(/\s+/g, '_')}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast(t('exported'));
+        };
+
+        const importJSON = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const data = JSON.parse(event.target.result);
+                    if(data.days) {
+                        state = data;
+                        renderApp();
+                        showToast(t('imported'));
+                    }
+                } catch (err) { alert("Invalid JSON"); }
+            };
+            reader.readAsText(file);
+            e.target.value = ''; // Reset
+        };
+
+        // --- 7. PDF Generation ---
+        const generateSyllabusHTML = () => {
+            let html = `
+                <div style="font-family: ${state.lang === 'ar' ? "'Cairo', sans-serif" : "'Inter', sans-serif"}; direction: ${state.lang === 'ar' ? 'rtl' : 'ltr'}; color: #333; max-width: 800px; margin: 0 auto; padding: 40px;">
+                    <div style="text-align: center; margin-bottom: 40px; border-bottom: 2px solid #4f46e5; padding-bottom: 20px;">
+                        <h1 style="color: #1e293b; margin: 0 0 10px 0; font-size: 28px;">${state.title}</h1>
+                        <p style="color: #64748b; margin: 0; font-size: 16px;">Syllabus / المنهج</p>
+                    </div>
+            `;
+
+            state.days.forEach((day, index) => {
+                html += `
+                    <div style="margin-bottom: 40px; page-break-inside: avoid;">
+                        <h2 style="color: #4f46e5; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 15px; font-size: 20px; display: flex; justify-content: space-between;">
+                            <span>${t('day')} ${index + 1}: ${day.title}</span>
+                            <span style="font-size: 14px; color: #64748b; font-weight: normal;">${day.startTime} - ${day.endTime}</span>
+                        </h2>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 14px; text-align: ${state.lang === 'ar' ? 'right' : 'left'};">
+                            <thead>
+                                <tr style="background-color: #f8fafc;">
+                                    <th style="padding: 10px; border-bottom: 2px solid #e2e8f0; width: 120px; color:#475569;">${t('startTime')}</th>
+                                    <th style="padding: 10px; border-bottom: 2px solid #e2e8f0; color:#475569;">Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+                day.items.forEach(item => {
+                    const isBreak = item.type === 'break';
+                    const color = item.color || defaultColors[item.type];
+                    
+                    html += `
+                        <tr style="background-color: ${isBreak ? '#fef3c7' : '#ffffff'}; border-bottom: 1px solid #e2e8f0; page-break-inside: avoid;">
+                            <td style="padding: 12px 10px; vertical-align: top; white-space: nowrap; border-inline-start: 4px solid ${color};">
+                                <strong style="color: #334155;">${item._calculatedStart}</strong><br>
+                                <span style="color: #94a3b8; font-size: 12px;">${item.duration}m</span>
+                            </td>
+                            <td style="padding: 12px 10px; vertical-align: top;">
+                                <div style="font-weight: bold; color: #1e293b; margin-bottom: 4px; font-size: 15px;">${item.title || 'Untitled'}</div>
+                                ${item.desc ? `<div style="color: #64748b; line-height: 1.4; white-space: pre-wrap;">${item.desc}</div>` : ''}
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                html += `</tbody></table></div>`;
+            });
+
+            html += `</div>`;
+            return html;
+        };
+
+        const exportSyllabusPDF = () => {
+            showToast(t('pdfGen'));
+            const container = document.getElementById('pdf-container');
+            container.innerHTML = generateSyllabusHTML();
+            container.style.display = 'block';
+
+            const opt = {
+                margin: 0,
+                filename: `Syllabus_${state.title.replace(/\s+/g, '_')}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(container).save().then(() => {
+                container.style.display = 'none';
+                container.innerHTML = '';
+            });
+        };
+
+        const exportTimelinePDF = () => {
+            showToast(t('pdfGen'));
+            const element = document.getElementById('timeline-export-area');
+            
+            // Temporarily hide tooltips for PDF rendering to avoid visual glitches
+            const tooltips = element.querySelectorAll('.absolute');
+            tooltips.forEach(t => t.style.display = 'none');
+
+            const opt = {
+                margin: 0.5,
+                filename: `Timeline_${state.title.replace(/\s+/g, '_')}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+                jsPDF: { unit: 'in', format: 'landscape', orientation: 'landscape' }
+            };
+
+            html2pdf().set(opt).from(element).save().then(() => {
+                // Restore tooltips
+                tooltips.forEach(t => t.style.display = '');
+            });
+        };
+
+        // --- Initialize ---
+        document.addEventListener('DOMContentLoaded', () => {
+            document.documentElement.dir = state.lang === 'ar' ? 'rtl' : 'ltr';
+            renderApp();
+        });
+
+    </script>
+</body>
+</html>
+
+
+
