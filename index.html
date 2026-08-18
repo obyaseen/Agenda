@@ -65,11 +65,24 @@
         }
         input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
         input[type="color"]::-webkit-color-swatch { border: 2px solid #e2e8f0; border-radius: 6px; }
+
+        /* Hidden PDF Container ensuring it renders but isn't seen by user */
+        #pdf-render-container {
+            position: absolute;
+            left: -9999px;
+            top: 0;
+            width: 800px;
+            background: white;
+            z-index: -10;
+        }
     </style>
 </head>
-<body class="bg-slate-50 min-h-screen text-slate-800 selection:bg-primary selection:text-white transition-all duration-300">
+<body class="bg-slate-50 min-h-screen text-slate-800 selection:bg-primary selection:text-white transition-all duration-300 relative overflow-x-hidden">
 
     <div id="app"></div>
+
+    <!-- Container where HTML is temporarily placed so html2canvas can read it properly -->
+    <div id="pdf-render-container"></div>
 
     <!-- Notification Toast -->
     <div id="toast" class="fixed bottom-4 end-4 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center gap-3 z-50">
@@ -263,10 +276,10 @@
                             <button onclick="exportJSON()" class="flex items-center gap-2 px-3 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors border border-slate-200" title="${t('exportJson')}">
                                 <i data-lucide="download" class="w-4 h-4"></i> <span class="hidden md:inline">${t('exportJson')}</span>
                             </button>
-                            <button onclick="exportSyllabusPDF()" class="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md shadow-sm transition-colors font-medium">
+                            <button onclick="exportSyllabusPDF()" id="btn-export-syllabus" class="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md shadow-sm transition-colors font-medium">
                                 <i data-lucide="file-text" class="w-4 h-4"></i> <span>${t('exportSyllabus')}</span>
                             </button>
-                            <button onclick="exportTimelinePDF()" class="flex items-center gap-2 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-md shadow-sm transition-colors font-medium">
+                            <button onclick="exportTimelinePDF()" id="btn-export-timeline" class="flex items-center gap-2 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-md shadow-sm transition-colors font-medium">
                                 <i data-lucide="presentation" class="w-4 h-4"></i> <span>${t('exportTimeline')}</span>
                             </button>
                         </div>
@@ -579,8 +592,23 @@
             reader.readAsText(file); e.target.value = '';
         };
 
-        // --- 7. PDF Generators (STRICT INLINE CSS) ---
-        // By using exact inline CSS, we bypass Tailwind CDN limitations for html2pdf completely.
+        // --- 7. PDF Generators (STRICT INLINE CSS & HIDDEN RENDERING CONTAINER) ---
+        
+        const setButtonLoading = (btnId, isLoading) => {
+            const btn = document.getElementById(btnId);
+            if (!btn) return;
+            if (isLoading) {
+                btn.dataset.originalHtml = btn.innerHTML;
+                btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> <span>Processing...</span>`;
+                btn.disabled = true;
+                btn.classList.add('opacity-75');
+            } else {
+                btn.innerHTML = btn.dataset.originalHtml;
+                btn.disabled = false;
+                btn.classList.remove('opacity-75');
+            }
+            lucide.createIcons();
+        };
 
         const getBasePDFStyles = () => `
             font-family: ${state.lang === 'ar' ? "'Cairo', sans-serif" : "'Inter', sans-serif"}; 
@@ -590,9 +618,11 @@
             background: #ffffff;
             line-height: 1.5;
             box-sizing: border-box;
+            width: 800px;
         `;
 
         const exportSyllabusPDF = () => {
+            setButtonLoading('btn-export-syllabus', true);
             showToast(t('pdfGen'));
             recalculateTimings();
             state.title = document.getElementById('project-title').value;
@@ -643,19 +673,26 @@
             });
             html += `</div>`;
 
+            // Place HTML securely in the DOM
+            const container = document.getElementById('pdf-render-container');
+            container.innerHTML = html;
+
             const opt = {
-                margin: 0.5, filename: `Syllabus_${state.title.replace(/\s+/g, '_')}.pdf`,
+                margin: 0.5, 
+                filename: `Syllabus_${state.title.replace(/\s+/g, '_')}.pdf`,
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2, useCORS: true },
                 jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
             };
             
-            // Create temporary DOM node for direct export
-            const el = document.createElement('div'); el.innerHTML = html;
-            html2pdf().set(opt).from(el).save();
+            html2pdf().set(opt).from(container).save().then(() => {
+                container.innerHTML = ''; // Clean up
+                setButtonLoading('btn-export-syllabus', false);
+            });
         };
 
         const exportTimelinePDF = () => {
+            setButtonLoading('btn-export-timeline', true);
             showToast(t('pdfGen'));
             recalculateTimings();
             state.title = document.getElementById('project-title').value;
@@ -671,7 +708,6 @@
             state.days.forEach((day, index) => {
                 const totalMins = day._totalDuration > 0 ? day._totalDuration : 1;
                 
-                // Day Header
                 html += `
                     <div style="margin-bottom: 40px; page-break-inside: avoid;">
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px; margin-bottom: 20px;">
@@ -683,7 +719,6 @@
                         </div>
                 `;
 
-                // Proportional Bar
                 let blocks = '';
                 day.items.forEach(item => {
                     const widthPercent = Math.max(0.5, (item.duration / totalMins) * 100);
@@ -698,26 +733,19 @@
                         </div>
                 `;
 
-                // Vertical Nodes
                 const isAr = state.lang === 'ar';
                 day.items.forEach((item, idx) => {
                     const color = item.color || defaultColors[item.type];
                     const isLast = idx === day.items.length - 1;
-                    
                     const flexDir = isAr ? 'row-reverse' : 'row';
                     const nodeMargin = isAr ? 'margin-left: 16px;' : 'margin-right: 16px;';
-                    const borderProp = isAr ? 'border-right' : 'border-left';
 
                     html += `
                         <div style="display: flex; align-items: stretch; margin-bottom: 16px; page-break-inside: avoid; flex-direction: ${flexDir};">
-                            
-                            <!-- Timeline Line & Dot -->
                             <div style="width: 24px; display: flex; flex-direction: column; align-items: center; position: relative; flex-shrink: 0; ${nodeMargin}">
                                 <div style="width: 16px; height: 16px; border-radius: 50%; background-color: ${color}; border: 3px solid white; box-shadow: 0 0 0 2px #e2e8f0; margin-top: 6px; z-index: 10;"></div>
                                 ${!isLast ? `<div style="width: 2px; background-color: #e2e8f0; position: absolute; top: 26px; bottom: -20px; z-index: 0;"></div>` : ''}
                             </div>
-
-                            <!-- Content -->
                             <div style="flex: 1; background-color: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); text-align: ${isAr ? 'right' : 'left'};">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; flex-direction: ${flexDir};">
                                     <h4 style="margin: 0; font-size: 18px; font-weight: bold; color: #0f172a; word-break: break-word;">${item.title || t('session')}</h4>
@@ -735,16 +763,22 @@
             });
             html += `</div>`;
 
+            // Place HTML securely in the DOM
+            const container = document.getElementById('pdf-render-container');
+            container.innerHTML = html;
+
             const opt = {
-                margin: 0.5, filename: `Timeline_${state.title.replace(/\s+/g, '_')}.pdf`,
+                margin: 0.5, 
+                filename: `Timeline_${state.title.replace(/\s+/g, '_')}.pdf`,
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2, useCORS: true, letterRendering: true },
                 jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
             };
             
-            // Create temporary DOM node for direct export
-            const el = document.createElement('div'); el.innerHTML = html;
-            html2pdf().set(opt).from(el).save();
+            html2pdf().set(opt).from(container).save().then(() => {
+                container.innerHTML = ''; // Clean up
+                setButtonLoading('btn-export-timeline', false);
+            });
         };
 
         // --- Initialize ---
@@ -755,4 +789,6 @@
     </script>
 </body>
 </html>
+
+
 
