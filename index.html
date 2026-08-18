@@ -56,7 +56,7 @@
         input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         input[type="number"] { -moz-appearance: textfield; }
         
-        button { touch-action: manipulation; }
+        button, select { touch-action: manipulation; }
 
         /* Custom Color Picker Styling */
         input[type="color"] {
@@ -93,13 +93,37 @@
     </div>
 
     <!-- Notification Toast -->
-    <div id="toast" class="fixed bottom-4 end-4 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center gap-3 z-50">
+    <div id="toast" class="fixed bottom-4 end-4 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center gap-3 z-50 pointer-events-none">
         <i data-lucide="info" class="w-5 h-5 text-secondary"></i>
         <span id="toast-msg">Notification</span>
     </div>
 
     <script>
-        // --- 1. Translations & Utilities ---
+        // --- 1. Utilities & Translations ---
+        const escapeHTML = (str) => {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        const generateId = () => Math.random().toString(36).substr(2, 9);
+        
+        const timeToMins = (time) => {
+            if (!time) return 0;
+            const [h, m] = time.split(':').map(Number);
+            return (h * 60) + m;
+        };
+
+        const minsToTime = (mins) => {
+            const h = Math.floor(mins / 60).toString().padStart(2, '0');
+            const m = Math.floor(mins % 60).toString().padStart(2, '0');
+            return `${h}:${m}`;
+        };
+
         const dict = {
             en: {
                 appTitle: "Enter title",
@@ -115,7 +139,10 @@
                 day: "Day",
                 startTime: "Start Time",
                 endTime: "End Time",
-                autoAdjust: "Auto-adjust durations to fit End Time",
+                scheduleMode: "Schedule Mode",
+                modeManual: "Manual End Time",
+                modeAutoEnd: "Auto-calculate End",
+                modeAutoStretch: "Auto-stretch Sessions",
                 addSession: "Session",
                 addBreak: "Break",
                 session: "Session",
@@ -147,7 +174,10 @@
                 day: "يوم",
                 startTime: "وقت البدء",
                 endTime: "وقت الانتهاء",
-                autoAdjust: "ضبط المدة تلقائياً لتناسب وقت الانتهاء",
+                scheduleMode: "نظام الوقت",
+                modeManual: "نهاية يدوية",
+                modeAutoEnd: "حساب النهاية تلقائياً",
+                modeAutoStretch: "تمديد الجلسات للضبط",
                 addSession: "جلسة",
                 addBreak: "استراحة",
                 session: "جلسة",
@@ -167,8 +197,8 @@
             }
         };
 
-        const generateId = () => Math.random().toString(36).substr(2, 9);
         const t = (key) => dict[state.lang][key];
+        const defaultColors = { session: '#4f46e5', break: '#f59e0b', logistic: '#64748b' };
 
         const showToast = (message) => {
             const toast = document.getElementById('toast');
@@ -177,59 +207,52 @@
             setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
         };
 
-        const timeToMins = (time) => {
-            if (!time) return 0;
-            const [h, m] = time.split(':').map(Number);
-            return (h * 60) + m;
-        };
-
-        const minsToTime = (mins) => {
-            const h = Math.floor(mins / 60).toString().padStart(2, '0');
-            const m = Math.floor(mins % 60).toString().padStart(2, '0');
-            return `${h}:${m}`;
-        };
-
-        const defaultColors = { session: '#4f46e5', break: '#f59e0b', logistic: '#64748b' };
-
-        // --- 2. State Management (Default Empty) ---
+        // --- 2. State Management ---
         let state = {
             lang: 'en',
             tab: 'builder',
-            title: "", // Changed to Empty Default
-            days: []   // Changed to Empty Default
+            title: "",
+            days: []
         };
-
         let sortableInstances = [];
 
         // --- 3. Core Logic (Time Calculation) ---
         const recalculateTimings = () => {
             state.days.forEach(day => {
                 let startMins = timeToMins(day.startTime);
-                let endMins = timeToMins(day.endTime);
+                let currentMins = startMins;
 
-                if (day.autoAdjust && startMins < endMins) {
-                    const totalAvailableMins = endMins - startMins;
-                    const fixedItems = day.items.filter(i => i.type !== 'session');
-                    const flexItems = day.items.filter(i => i.type === 'session');
-                    
-                    const fixedMins = fixedItems.reduce((sum, i) => sum + (Number(i.duration) || 0), 0);
-                    const remainingMins = Math.max(0, totalAvailableMins - fixedMins);
-                    
-                    const flexDuration = flexItems.length > 0 ? Math.floor(remainingMins / flexItems.length) : 0;
-                    flexItems.forEach(i => i.duration = flexDuration);
-                    if (flexItems.length > 0 && remainingMins % flexItems.length !== 0) {
-                        flexItems[flexItems.length - 1].duration += (remainingMins % flexItems.length);
+                // Handle 'auto-stretch' Mode (Adjusts sessions to fit End Time)
+                if (day.mode === 'auto-stretch') {
+                    let endMins = timeToMins(day.endTime);
+                    if (startMins < endMins) {
+                        const totalAvailableMins = endMins - startMins;
+                        const fixedItems = day.items.filter(i => i.type !== 'session');
+                        const flexItems = day.items.filter(i => i.type === 'session');
+                        
+                        const fixedMins = fixedItems.reduce((sum, i) => sum + (Number(i.duration) || 0), 0);
+                        const remainingMins = Math.max(0, totalAvailableMins - fixedMins);
+                        
+                        const flexDuration = flexItems.length > 0 ? Math.floor(remainingMins / flexItems.length) : 0;
+                        flexItems.forEach(i => i.duration = flexDuration);
+                        if (flexItems.length > 0 && remainingMins % flexItems.length !== 0) {
+                            flexItems[flexItems.length - 1].duration += (remainingMins % flexItems.length);
+                        }
                     }
                 }
 
-                let currentMins = startMins;
+                // Calculate item start and end times
                 day.items.forEach(item => {
                     item._calculatedStart = minsToTime(currentMins);
                     currentMins += Number(item.duration) || 0;
                     item._calculatedEnd = minsToTime(currentMins);
                 });
 
-                if (!day.autoAdjust) day.endTime = minsToTime(currentMins);
+                // Handle 'auto-end' Mode (Calculates End Time from sessions)
+                if (day.mode === 'auto-end') {
+                    day.endTime = minsToTime(currentMins);
+                }
+
                 day._totalDuration = currentMins - startMins;
             });
         };
@@ -247,14 +270,13 @@
             app.innerHTML = `
                 <header class="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm print:hidden">
                     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 lg:py-4 flex flex-col lg:flex-row justify-between items-center gap-4">
-                        
-                        <!-- Title & Author Badge -->
+                        <!-- Title -->
                         <div class="flex flex-col w-full lg:w-auto">
                             <div class="flex items-center gap-3">
                                 <div class="bg-primary p-2 md:p-3 rounded-lg text-white shrink-0 shadow-sm">
                                     <i data-lucide="calendar-clock" class="w-5 h-5 md:w-6 md:h-6"></i>
                                 </div>
-                                <input type="text" id="project-title" value="${state.title}" class="text-lg md:text-2xl font-bold text-slate-800 bg-transparent border-b-2 border-transparent hover:border-slate-300 focus:border-primary focus:outline-none transition-colors w-full lg:w-80 min-w-0 placeholder-slate-400" placeholder="${t('appTitle')}">
+                                <input type="text" id="project-title" value="${escapeHTML(state.title)}" class="text-lg md:text-2xl font-bold text-slate-800 bg-transparent border-b-2 border-transparent hover:border-slate-300 focus:border-primary focus:outline-none transition-colors w-full lg:w-80 min-w-0 placeholder-slate-400" placeholder="${t('appTitle')}">
                             </div>
                             <div class="flex items-center gap-1.5 text-xs text-slate-500 mt-1.5 ms-12 md:ms-14">
                                 <span class="font-medium">${t('madeBy')}</span>
@@ -267,9 +289,7 @@
                         <!-- Toolbars -->
                         <div class="flex flex-wrap items-center gap-2 text-sm justify-center w-full lg:w-auto">
                             <button onclick="toggleLang()" class="px-3 md:px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md font-medium border border-slate-200 transition-colors shadow-sm">${state.lang === 'en' ? 'عربي' : 'English'}</button>
-                            
                             <div class="h-6 w-px bg-slate-300 mx-1 hidden md:block"></div>
-                            
                             <input type="file" id="import-file" accept=".json" class="hidden" onchange="importJSON(event)">
                             <button onclick="document.getElementById('import-file').click()" class="flex items-center gap-2 px-3 py-2 text-slate-600 bg-white hover:bg-slate-50 rounded-md transition-colors border border-slate-200 shadow-sm" title="${t('import')}">
                                 <i data-lucide="upload" class="w-4 h-4"></i> <span class="hidden sm:inline">${t('import')}</span>
@@ -277,9 +297,7 @@
                             <button onclick="exportJSON()" class="flex items-center gap-2 px-3 py-2 text-slate-600 bg-white hover:bg-slate-50 rounded-md transition-colors border border-slate-200 shadow-sm" title="${t('exportJson')}">
                                 <i data-lucide="download" class="w-4 h-4"></i> <span class="hidden sm:inline">${t('exportJson')}</span>
                             </button>
-                            
                             <div class="h-6 w-px bg-slate-300 mx-1 hidden lg:block"></div>
-
                             <button onclick="exportSyllabusPDF()" id="btn-export-syllabus" class="flex-1 sm:flex-none justify-center items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md shadow-sm transition-colors font-medium flex">
                                 <i data-lucide="file-text" class="w-4 h-4"></i> <span>${t('exportSyllabus')}</span>
                             </button>
@@ -298,18 +316,15 @@
                         </button>
                     </div>
                 </header>
-
                 <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
                     ${state.tab === 'builder' ? renderBuilder() : renderTimelineScreen()}
                 </main>
             `;
             lucide.createIcons();
             if (state.tab === 'builder') initSortables();
-            attachInputListeners();
         };
 
         const switchTab = (tab) => {
-            state.title = document.getElementById('project-title').value;
             state.tab = tab;
             renderApp();
         };
@@ -340,6 +355,8 @@
 
         const renderDay = (day, index) => {
             const isCollapsed = day.isCollapsed;
+            const isAutoEnd = day.mode === 'auto-end';
+            
             return `
                 <div class="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow border border-slate-200 overflow-hidden flex flex-col h-full ${!isCollapsed ? 'max-h-[85vh]' : ''}">
                     <!-- Day Header -->
@@ -348,7 +365,7 @@
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-2 mb-2">
                                     <span class="bg-primary/10 text-primary text-xs font-bold px-2 py-1 rounded whitespace-nowrap cursor-pointer select-none" onclick="toggleCollapseDay('${day.id}')">${t('day')} ${index + 1}</span>
-                                    <input type="text" class="font-bold text-lg md:text-xl text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none w-full min-w-0 day-title-input" value="${day.title}" data-day-id="${day.id}">
+                                    <input type="text" class="font-bold text-lg md:text-xl text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none w-full min-w-0 day-title-input" value="${escapeHTML(day.title)}" data-day-id="${day.id}">
                                 </div>
                             </div>
                             <div class="flex items-center">
@@ -361,21 +378,24 @@
                             </div>
                         </div>
                         
-                        <div class="grid grid-cols-2 gap-3 bg-white p-3 rounded-lg border border-slate-200 mb-3 text-sm shadow-sm">
+                        <div class="grid grid-cols-2 gap-3 bg-white p-3 rounded-lg border border-slate-200 text-sm shadow-sm">
                             <div>
                                 <label class="block text-[11px] font-bold text-slate-400 mb-1 uppercase tracking-wider">${t('startTime')}</label>
-                                <input type="time" class="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 md:py-1 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary day-start-input" value="${day.startTime}" data-day-id="${day.id}">
+                                <input type="time" class="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary day-start-input" value="${day.startTime}" data-day-id="${day.id}">
                             </div>
                             <div>
-                                <label class="block text-[11px] font-bold text-slate-400 mb-1 uppercase tracking-wider">${t('endTime')} ${!day.autoAdjust ? '(Auto)' : ''}</label>
-                                <input type="time" class="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 md:py-1 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary day-end-input" value="${day.endTime}" data-day-id="${day.id}" ${!day.autoAdjust ? 'readonly disabled class="opacity-60"' : ''}>
+                                <label class="block text-[11px] font-bold text-slate-400 mb-1 uppercase tracking-wider">${t('endTime')} ${isAutoEnd ? '(Auto)' : ''}</label>
+                                <input type="time" class="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary day-end-input" value="${day.endTime}" data-day-id="${day.id}" ${isAutoEnd ? 'readonly disabled class="opacity-60"' : ''}>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-[11px] font-bold text-slate-400 mb-1 uppercase tracking-wider">${t('scheduleMode')}</label>
+                                <select class="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary day-mode-select text-xs font-semibold text-slate-600 cursor-pointer" data-day-id="${day.id}">
+                                    <option value="manual" ${day.mode === 'manual' ? 'selected' : ''}>${t('modeManual')}</option>
+                                    <option value="auto-end" ${day.mode === 'auto-end' ? 'selected' : ''}>${t('modeAutoEnd')}</option>
+                                    <option value="auto-stretch" ${day.mode === 'auto-stretch' ? 'selected' : ''}>${t('modeAutoStretch')}</option>
+                                </select>
                             </div>
                         </div>
-                        
-                        <label class="flex items-center gap-2 text-xs md:text-sm font-medium text-slate-600 cursor-pointer p-1 hover:bg-slate-200 rounded transition-colors w-fit">
-                            <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary w-4 h-4 day-auto-checkbox" data-day-id="${day.id}" ${day.autoAdjust ? 'checked' : ''}>
-                            ${t('autoAdjust')}
-                        </label>
                     </div>
 
                     ${!isCollapsed ? `
@@ -399,7 +419,7 @@
         };
 
         const renderItem = (day, item) => {
-            const isAuto = day.autoAdjust && item.type === 'session';
+            const isStretch = day.mode === 'auto-stretch' && item.type === 'session';
             const currentColor = item.color || defaultColors[item.type];
             return `
                 <div class="group relative bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md transition-all mb-3 overflow-hidden border-s-4" style="border-inline-start-color: ${currentColor}" data-item-id="${item.id}">
@@ -412,7 +432,7 @@
                         </div>
                         <div class="flex-1 min-w-0 ms-1 flex flex-col gap-1.5">
                             <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-                                <input type="text" class="font-bold text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none flex-1 min-w-0 text-sm md:text-base py-0.5 item-title-input" value="${item.title}" placeholder="${t('titlePlaceholder')}" data-day-id="${day.id}" data-item-id="${item.id}">
+                                <input type="text" class="font-bold text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none flex-1 min-w-0 text-sm md:text-base py-0.5 item-title-input" value="${escapeHTML(item.title)}" placeholder="${t('titlePlaceholder')}" data-day-id="${day.id}" data-item-id="${item.id}">
                                 
                                 <div class="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-200 shrink-0 w-fit">
                                     <input type="color" value="${currentColor}" class="item-color-input w-5 h-5 md:w-6 md:h-6 rounded cursor-pointer shrink-0 shadow-sm" data-day-id="${day.id}" data-item-id="${item.id}" title="${t('color')}">
@@ -424,11 +444,11 @@
                                     </select>
                                 </div>
                             </div>
-                            <textarea class="text-xs md:text-sm text-slate-500 bg-transparent border border-transparent hover:border-slate-200 focus:border-primary rounded p-1.5 focus:outline-none w-full resize-none item-desc-input" rows="1" placeholder="${t('descPlaceholder')}" data-day-id="${day.id}" data-item-id="${item.id}">${item.desc || ''}</textarea>
+                            <textarea class="text-xs md:text-sm text-slate-500 bg-transparent border border-transparent hover:border-slate-200 focus:border-primary rounded p-1.5 focus:outline-none w-full resize-none item-desc-input" rows="1" placeholder="${t('descPlaceholder')}" data-day-id="${day.id}" data-item-id="${item.id}">${escapeHTML(item.desc)}</textarea>
                         </div>
                         <div class="flex flex-col items-end justify-between h-full shrink-0 ms-1 gap-2">
-                            <div class="flex items-center bg-slate-50 border border-slate-200 rounded overflow-hidden ${isAuto ? 'opacity-60' : ''}" title="${isAuto ? 'Calculated automatically' : t('duration')}">
-                                <input type="number" class="w-10 md:w-12 text-center py-1.5 md:py-1 text-xs font-semibold focus:outline-none focus:bg-white item-duration-input" value="${item.duration}" min="0" data-day-id="${day.id}" data-item-id="${item.id}" ${isAuto ? 'readonly tabindex="-1"' : ''}>
+                            <div class="flex items-center bg-slate-50 border border-slate-200 rounded overflow-hidden ${isStretch ? 'opacity-60' : ''}" title="${isStretch ? 'Calculated automatically' : t('duration')}">
+                                <input type="number" class="w-10 md:w-12 text-center py-1.5 md:py-1 text-xs font-semibold focus:outline-none focus:bg-white item-duration-input" value="${item.duration}" min="0" data-day-id="${day.id}" data-item-id="${item.id}" ${isStretch ? 'readonly tabindex="-1"' : ''}>
                                 <span class="px-1.5 text-[10px] font-medium text-slate-500 bg-slate-100 border-s border-slate-200 py-2 md:py-1.5">m</span>
                             </div>
                             <button onclick="deleteItem('${day.id}', '${item.id}')" class="text-slate-300 hover:text-red-500 transition-colors p-2 rounded hover:bg-red-50"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
@@ -440,10 +460,14 @@
 
         const renderTimelineScreen = () => {
             const daysHTML = state.days.length > 0 ? state.days.map((day, index) => {
-                const totalMins = day._totalDuration > 0 ? day._totalDuration : 1;
+                
+                // Allow timeline bar to show empty space at the end if Day End Time > Sessions total in manual mode
+                const dayBoundsMins = timeToMins(day.endTime) - timeToMins(day.startTime);
+                const barTotalMins = Math.max(day._totalDuration, dayBoundsMins, 1);
+                
                 const barBlocks = day.items.map(item => {
-                    const widthPercent = Math.max(0.5, (item.duration / totalMins) * 100);
-                    return `<div class="h-full border-e border-white/30 last:border-0 hover:opacity-80 transition-opacity" style="width: ${widthPercent}%; background-color: ${item.color || defaultColors[item.type]};" title="${item.title}"></div>`;
+                    const widthPercent = (item.duration / barTotalMins) * 100;
+                    return `<div class="h-full border-e border-white/30 last:border-0 hover:opacity-80 transition-opacity" style="width: ${widthPercent}%; background-color: ${item.color || defaultColors[item.type]};" title="${escapeHTML(item.title)}"></div>`;
                 }).join('');
 
                 const listItems = day.items.map((item, idx) => {
@@ -457,13 +481,13 @@
                             </div>
                             <div class="flex-1 bg-white border border-slate-100 rounded-lg p-3 md:p-4 shadow-sm hover:shadow-md transition-all min-w-0 group-hover:border-slate-200">
                                 <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-2">
-                                    <h4 class="font-bold text-slate-800 text-base md:text-lg break-words leading-tight">${item.title || t('session')}</h4>
+                                    <h4 class="font-bold text-slate-800 text-base md:text-lg break-words leading-tight">${escapeHTML(item.title) || t('session')}</h4>
                                     <span class="text-xs md:text-sm font-bold text-slate-600 bg-slate-50 border border-slate-100 px-2 py-1 md:px-3 md:py-1 rounded-md shrink-0 text-center shadow-sm" dir="ltr">
                                         ${item._calculatedStart} - ${item._calculatedEnd}<br>
                                         <span class="text-[10px] md:text-xs font-normal text-slate-400">(${item.duration}m)</span>
                                     </span>
                                 </div>
-                                ${item.desc ? `<p class="text-slate-500 text-xs md:text-sm whitespace-pre-wrap leading-relaxed">${item.desc}</p>` : ''}
+                                ${item.desc ? `<p class="text-slate-500 text-xs md:text-sm whitespace-pre-wrap leading-relaxed">${escapeHTML(item.desc)}</p>` : ''}
                             </div>
                         </div>
                     `;
@@ -473,7 +497,7 @@
                     <div class="mb-10 md:mb-14 page-break-inside-avoid">
                         <div class="flex flex-wrap items-center gap-2 md:gap-3 border-b-2 border-slate-100 pb-3 md:pb-4 mb-4 md:mb-6">
                             <span class="bg-primary text-white px-2 py-1 md:px-3 rounded-md text-xs md:text-sm font-bold shadow-sm">${t('day')} ${index + 1}</span>
-                            <h3 class="text-lg md:text-xl font-bold text-slate-800 break-words">${day.title}</h3>
+                            <h3 class="text-lg md:text-xl font-bold text-slate-800 break-words">${escapeHTML(day.title)}</h3>
                             <span class="text-xs md:text-sm font-semibold text-slate-400 ms-auto bg-slate-50 px-2 md:px-3 py-1 rounded-full border border-slate-200 shadow-sm" dir="ltr">${day.startTime} - ${day.endTime}</span>
                         </div>
                         <div class="w-full h-4 sm:h-5 md:h-6 bg-slate-100 rounded-full overflow-hidden flex shadow-inner mb-6 md:mb-8 border border-slate-200">
@@ -487,7 +511,7 @@
             return `
                 <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6 md:p-10 max-w-4xl mx-auto">
                     <div class="text-center mb-8 md:mb-12 border-b-2 border-slate-100 pb-6 md:pb-8">
-                        <h2 class="text-2xl md:text-4xl font-bold text-slate-800 mb-3 break-words">${state.title || t('appTitle')}</h2>
+                        <h2 class="text-2xl md:text-4xl font-bold text-slate-800 mb-3 break-words">${escapeHTML(state.title) || t('appTitle')}</h2>
                         <p class="text-slate-500 text-sm md:text-base flex items-center justify-center gap-2 font-medium bg-slate-50 w-fit mx-auto px-4 py-1.5 rounded-full border border-slate-100"><i data-lucide="split-square-vertical" class="w-4 h-4"></i> ${t('tabTimeline')}</p>
                     </div>
                     <div>${daysHTML}</div>
@@ -495,7 +519,7 @@
             `;
         };
 
-        // --- 5. Event Listeners ---
+        // --- 5. Event Listeners & Global Setup ---
         const initSortables = () => {
             sortableInstances.forEach(s => s.destroy()); sortableInstances = [];
             document.querySelectorAll('.sortable-list').forEach(listEl => {
@@ -506,7 +530,7 @@
                     handle: '.drag-handle',
                     ghostClass: 'sortable-ghost', 
                     dragClass: 'sortable-drag',
-                    delay: 150, // Critical for mobile scrolling
+                    delay: 150, 
                     delayOnTouchOnly: true,
                     touchStartThreshold: 5,
                     onEnd: function (evt) {
@@ -519,58 +543,108 @@
             });
         };
 
-        const attachInputListeners = () => {
-            if (state.tab !== 'builder') return;
-            const container = document.getElementById('days-container');
-            if(!container) return;
+        const setupGlobalEventListeners = () => {
+            const app = document.getElementById('app');
 
-            container.addEventListener('input', (e) => {
+            app.addEventListener('input', (e) => {
                 const target = e.target;
+                
+                if (target.id === 'project-title') {
+                    state.title = target.value;
+                    return;
+                }
+
+                if (!target.dataset.dayId) return;
                 const day = state.days.find(d => d.id === target.dataset.dayId);
+                if (!day) return;
+
                 const item = target.dataset.itemId ? day.items.find(i => i.id === target.dataset.itemId) : null;
-                if (target.classList.contains('day-title-input')) day.title = target.value;
-                if (target.classList.contains('item-title-input')) item.title = target.value;
-                if (target.classList.contains('item-desc-input')) {
-                    item.desc = target.value; target.style.height = 'auto'; target.style.height = (target.scrollHeight) + 'px';
+
+                if (target.classList.contains('day-title-input')) {
+                    day.title = target.value;
+                } else if (item) {
+                    if (target.classList.contains('item-title-input')) {
+                        item.title = target.value;
+                    } else if (target.classList.contains('item-desc-input')) {
+                        item.desc = target.value;
+                        target.style.height = 'auto'; 
+                        target.style.height = (target.scrollHeight) + 'px';
+                    }
                 }
             });
 
-            container.addEventListener('change', (e) => {
+            app.addEventListener('change', (e) => {
                 const target = e.target;
-                const day = state.days.find(d => d.id === target.dataset.dayId);
-                const item = target.dataset.itemId ? day.items.find(i => i.id === target.dataset.itemId) : null;
                 let needsRender = false;
+
+                if (!target.dataset.dayId) return;
+                
+                const day = state.days.find(d => d.id === target.dataset.dayId);
+                if (!day) return;
+                
+                const item = target.dataset.itemId ? day.items.find(i => i.id === target.dataset.itemId) : null;
+
                 if (target.classList.contains('day-start-input')) { day.startTime = target.value; needsRender = true; }
                 if (target.classList.contains('day-end-input')) { day.endTime = target.value; needsRender = true; }
-                if (target.classList.contains('day-auto-checkbox')) { day.autoAdjust = target.checked; needsRender = true; }
+                if (target.classList.contains('day-mode-select')) { day.mode = target.value; needsRender = true; }
+                
                 if (item) {
-                    if (target.classList.contains('item-duration-input')) { item.duration = parseInt(target.value) || 0; needsRender = true; }
-                    if (target.classList.contains('item-color-input')) { item.color = target.value; needsRender = true; }
-                    if (target.classList.contains('item-type-select')) { item.type = target.value; item.color = defaultColors[item.type]; needsRender = true; }
+                    if (target.classList.contains('item-duration-input')) { 
+                        item.duration = parseInt(target.value) || 0; 
+                        needsRender = true; 
+                    }
+                    if (target.classList.contains('item-color-input')) { 
+                        item.color = target.value; 
+                        needsRender = true; 
+                    }
+                    if (target.classList.contains('item-type-select')) { 
+                        item.type = target.value; 
+                        item.color = defaultColors[item.type]; 
+                        needsRender = true; 
+                    }
                 }
-                if(needsRender) renderApp();
+                
+                if (needsRender) renderApp();
             });
         };
 
         // UI Action Handlers
-        const addDay = () => { state.days.push({ id: generateId(), title: `${t('day')} ${state.days.length + 1}`, startTime: "09:00", endTime: "16:00", autoAdjust: false, isCollapsed: false, items: [] }); renderApp(); };
+        const addDay = () => { 
+            state.days.push({ 
+                id: generateId(), 
+                title: `${t('day')} ${state.days.length + 1}`, 
+                startTime: "09:00", 
+                endTime: "16:00", 
+                mode: 'manual', // New day respects the manual non-auto behavior as default
+                isCollapsed: false, 
+                items: [] 
+            }); 
+            renderApp(); 
+        };
+        
         const deleteDay = (id) => { if(confirm(t('deleteConfirm'))) { state.days = state.days.filter(d => d.id !== id); renderApp(); } };
         const toggleCollapseDay = (id) => { const day = state.days.find(d => d.id === id); if(day) { day.isCollapsed = !day.isCollapsed; renderApp(); } };
+        
         const clearAllData = () => { 
             if(confirm(t('clearConfirm'))) { 
                 state.days = []; 
-                document.getElementById('project-title').value = "";
-                state.title = "";
+                state.title = ""; 
                 renderApp(); 
             } 
         };
+        
         const addItem = (dayId, type) => { state.days.find(d => d.id === dayId).items.push({ id: generateId(), title: type === 'session' ? t('session') : t('break'), type: type, duration: type === 'session' ? 60 : 15, desc: "", color: defaultColors[type] }); renderApp(); };
         const deleteItem = (dayId, itemId) => { const day = state.days.find(d => d.id === dayId); day.items = day.items.filter(i => i.id !== itemId); renderApp(); };
 
-        // Export/Import JSON
+        // Export/Import JSON (Now strictly exports entered data, removing temporary calculated fields)
         const exportJSON = () => {
-            state.title = document.getElementById('project-title').value;
-            const dataStr = JSON.stringify(state, null, 2);
+            const exportState = JSON.parse(JSON.stringify(state)); // Deep Clone
+            exportState.days.forEach(d => {
+                delete d._totalDuration;
+                d.items.forEach(i => { delete i._calculatedStart; delete i._calculatedEnd; });
+            });
+            
+            const dataStr = JSON.stringify(exportState, null, 2);
             const blob = new Blob([dataStr], {type: "application/json"});
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a'); a.href = url; 
@@ -579,6 +653,7 @@
             a.click();
             URL.revokeObjectURL(url); showToast(t('exported'));
         };
+
         const importJSON = (e) => {
             const file = e.target.files[0]; if (!file) return;
             const reader = new FileReader();
@@ -586,8 +661,11 @@
                 try { 
                     const data = JSON.parse(event.target.result); 
                     if(data.days) { 
-                        // Ensure legacy saves get the isCollapsed property
-                        data.days.forEach(d => { if(d.isCollapsed === undefined) d.isCollapsed = false; });
+                        // Backwards compatibility migration for old JSON saves
+                        data.days.forEach(d => { 
+                            if(d.isCollapsed === undefined) d.isCollapsed = false; 
+                            if(d.mode === undefined) d.mode = d.autoAdjust ? 'auto-stretch' : 'auto-end';
+                        });
                         state = data; 
                         renderApp(); 
                         showToast(t('imported')); 
@@ -632,7 +710,7 @@
                     margin: 0, 
                     filename: filename,
                     image: { type: 'jpeg', quality: 0.98 },
-                    html2canvas: { scale: 2, useCORS: true, logging: false }, // Removed letterRendering for Arabic spacing fix
+                    html2canvas: { scale: 2, useCORS: true, logging: false }, 
                     jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
                 };
                 
@@ -667,7 +745,6 @@
             const btnId = 'btn-export-syllabus';
             setButtonLoading(btnId, true);
             recalculateTimings();
-            state.title = document.getElementById('project-title').value;
             const isAr = state.lang === 'ar';
             const safeTitle = state.title ? '_' + state.title.replace(/\s+/g, '_') : '';
             const filename = `Syllabus${safeTitle}.pdf`;
@@ -676,7 +753,7 @@
             let html = `
                 <div style="${getPDFInlineStyles(isAr)}" dir="${isAr ? 'rtl' : 'ltr'}">
                     <div style="text-align: center; margin-bottom: 40px; border-bottom: 2px solid #4f46e5; padding-bottom: 20px;">
-                        <h1 style="color: #0f172a; margin: 0 0 10px 0; font-size: 28px; font-weight: bold;">${state.title || t('appTitle')}</h1>
+                        <h1 style="color: #0f172a; margin: 0 0 10px 0; font-size: 28px; font-weight: bold;">${escapeHTML(state.title) || t('appTitle')}</h1>
                         <p style="color: #64748b; margin: 0; font-size: 16px;">Syllabus</p>
                     </div>
             `;
@@ -685,7 +762,7 @@
                 html += `
                     <div style="margin-bottom: 40px; page-break-inside: avoid;">
                         <div style="border-bottom: 2px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
-                            <h2 style="color: #4f46e5; margin: 0; font-size: 20px; font-weight: bold; text-align: ${align};">${t('day')} ${index + 1}: ${day.title}</h2>
+                            <h2 style="color: #4f46e5; margin: 0; font-size: 20px; font-weight: bold; text-align: ${align};">${t('day')} ${index + 1}: ${escapeHTML(day.title)}</h2>
                             <span style="font-size: 14px; color: #64748b; direction: ltr; display: inline-block;">${day.startTime} - ${day.endTime}</span>
                         </div>
                         <table style="width: 100%; border-collapse: collapse; font-size: 14px; text-align: ${align};" dir="${isAr ? 'rtl' : 'ltr'}">
@@ -709,8 +786,8 @@
                                 <span style="color: #64748b; font-size: 12px; display: inline-block;" dir="ltr">${item.duration}m</span>
                             </td>
                             <td style="padding: 12px; vertical-align: top; text-align: ${align};">
-                                <div style="font-weight: bold; color: #0f172a; margin-bottom: 4px; font-size: 16px; word-break: break-word;">${item.title || 'Untitled'}</div>
-                                ${item.desc ? `<div style="color: #475569; white-space: pre-wrap; word-break: break-word;">${item.desc}</div>` : ''}
+                                <div style="font-weight: bold; color: #0f172a; margin-bottom: 4px; font-size: 16px; word-break: break-word;">${escapeHTML(item.title) || 'Untitled'}</div>
+                                ${item.desc ? `<div style="color: #475569; white-space: pre-wrap; word-break: break-word;">${escapeHTML(item.desc)}</div>` : ''}
                             </td>
                         </tr>
                     `;
@@ -726,7 +803,6 @@
             const btnId = 'btn-export-timeline';
             setButtonLoading(btnId, true);
             recalculateTimings();
-            state.title = document.getElementById('project-title').value;
             const isAr = state.lang === 'ar';
             const safeTitle = state.title ? '_' + state.title.replace(/\s+/g, '_') : '';
             const filename = `Timeline${safeTitle}.pdf`;
@@ -735,20 +811,21 @@
             let html = `
                 <div style="${getPDFInlineStyles(isAr)}" dir="${isAr ? 'rtl' : 'ltr'}">
                     <div style="text-align: center; margin-bottom: 40px; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px;">
-                        <h1 style="color: #0f172a; margin: 0 0 10px 0; font-size: 28px; font-weight: bold;">${state.title || t('appTitle')}</h1>
+                        <h1 style="color: #0f172a; margin: 0 0 10px 0; font-size: 28px; font-weight: bold;">${escapeHTML(state.title) || t('appTitle')}</h1>
                         <p style="color: #64748b; margin: 0; font-size: 16px;">Timeline View</p>
                     </div>
             `;
 
             state.days.forEach((day, index) => {
-                const totalMins = day._totalDuration > 0 ? day._totalDuration : 1;
+                const dayBoundsMins = timeToMins(day.endTime) - timeToMins(day.startTime);
+                const barTotalMins = Math.max(day._totalDuration, dayBoundsMins, 1);
                 
                 html += `
                     <div style="margin-bottom: 40px; page-break-inside: avoid;">
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px; margin-bottom: 20px;">
                             <div style="display: flex; align-items: center; gap: 12px;">
                                 <span style="background-color: #4f46e5; color: white; padding: 4px 12px; border-radius: 6px; font-size: 14px; font-weight: bold;">${t('day')} ${index + 1}</span>
-                                <h3 style="margin: 0; font-size: 20px; font-weight: bold; color: #0f172a; word-break: break-word; text-align: ${align};">${day.title}</h3>
+                                <h3 style="margin: 0; font-size: 20px; font-weight: bold; color: #0f172a; word-break: break-word; text-align: ${align};">${escapeHTML(day.title)}</h3>
                             </div>
                             <span style="font-size: 14px; color: #64748b; border: 1px solid #e2e8f0; padding: 4px 12px; border-radius: 20px; background-color: #f8fafc; direction: ltr; display: inline-block;">${day.startTime} - ${day.endTime}</span>
                         </div>
@@ -756,7 +833,7 @@
 
                 let blocks = '';
                 day.items.forEach(item => {
-                    const widthPercent = Math.max(0.5, (item.duration / totalMins) * 100);
+                    const widthPercent = (item.duration / barTotalMins) * 100;
                     const color = item.color || defaultColors[item.type];
                     const borderSide = isAr ? 'border-left' : 'border-right';
                     blocks += `<div style="width: ${widthPercent}%; height: 100%; background-color: ${color}; box-sizing: border-box; ${borderSide}: 1px solid rgba(255,255,255,0.3);"></div>`;
@@ -781,13 +858,13 @@
                             </div>
                             <div style="flex: 1; background-color: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); text-align: ${align};">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; flex-direction: row;">
-                                    <h4 style="margin: 0; font-size: 18px; font-weight: bold; color: #0f172a; word-break: break-word;">${item.title || t('session')}</h4>
+                                    <h4 style="margin: 0; font-size: 18px; font-weight: bold; color: #0f172a; word-break: break-word;">${escapeHTML(item.title) || t('session')}</h4>
                                     <div style="font-size: 14px; font-weight: bold; color: #475569; background-color: #f8fafc; border: 1px solid #f1f5f9; padding: 4px 8px; border-radius: 6px; text-align: center; flex-shrink: 0; margin: 0 8px; direction: ltr;">
                                         ${item._calculatedStart} - ${item._calculatedEnd} <br>
                                         <span style="font-size: 12px; font-weight: normal; color: #94a3b8;">(${item.duration}m)</span>
                                     </div>
                                 </div>
-                                ${item.desc ? `<p style="margin: 0; font-size: 14px; color: #475569; white-space: pre-wrap; word-break: break-word;">${item.desc}</p>` : ''}
+                                ${item.desc ? `<p style="margin: 0; font-size: 14px; color: #475569; white-space: pre-wrap; word-break: break-word;">${escapeHTML(item.desc)}</p>` : ''}
                             </div>
                         </div>
                     `;
@@ -802,6 +879,7 @@
         // --- Initialize ---
         document.addEventListener('DOMContentLoaded', () => {
             document.documentElement.dir = state.lang === 'ar' ? 'rtl' : 'ltr';
+            setupGlobalEventListeners();
             renderApp();
         });
     </script>
