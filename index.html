@@ -285,7 +285,7 @@
 
                 <!-- Main Content -->
                 <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                    ${state.tab === 'builder' ? renderBuilder() : renderTimelineContainer()}
+                    ${state.tab === 'builder' ? renderBuilder() : renderTimelineScreen()}
                 </main>
             `;
 
@@ -377,19 +377,16 @@
                             <i data-lucide="grip-vertical" class="w-5 h-5"></i>
                         </div>
 
-                        <!-- Timing -->
                         <div class="flex flex-col items-center justify-center min-w-[65px] mt-1 shrink-0 bg-slate-50 rounded py-1 px-2 border border-slate-100">
                             <span class="text-xs font-bold text-slate-700">${item._calculatedStart}</span>
                             <span class="text-[10px] text-slate-400 my-0.5">${t('to')}</span>
                             <span class="text-xs font-bold text-slate-600">${item._calculatedEnd}</span>
                         </div>
 
-                        <!-- Content -->
                         <div class="flex-1 min-w-0 ms-1">
                             <div class="flex flex-wrap items-center gap-2 mb-2">
                                 <input type="text" class="font-bold text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none flex-1 min-w-[120px] text-sm item-title-input" value="${item.title}" placeholder="${t('titlePlaceholder')}" data-day-id="${day.id}" data-item-id="${item.id}">
                                 
-                                <!-- Color and Type Picker -->
                                 <div class="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-200 shrink-0">
                                     <input type="color" value="${currentColor}" class="item-color-input w-5 h-5 rounded cursor-pointer shrink-0" data-day-id="${day.id}" data-item-id="${item.id}" title="${t('color')}">
                                     <div class="w-px h-4 bg-slate-300"></div>
@@ -403,7 +400,6 @@
                             <textarea class="text-xs text-slate-500 bg-transparent border border-transparent hover:border-slate-200 focus:border-primary rounded p-1 focus:outline-none w-full resize-none item-desc-input" rows="1" placeholder="${t('descPlaceholder')}" data-day-id="${day.id}" data-item-id="${item.id}">${item.desc || ''}</textarea>
                         </div>
 
-                        <!-- Duration & Delete -->
                         <div class="flex flex-col items-end gap-2 shrink-0">
                             <div class="flex items-center bg-slate-50 border border-slate-200 rounded overflow-hidden ${isAuto ? 'opacity-60' : ''}" title="${isAuto ? 'Calculated automatically' : t('duration')}">
                                 <input type="number" class="w-12 text-center py-1 text-xs font-semibold focus:outline-none focus:bg-white item-duration-input" value="${item.duration}" min="0" data-day-id="${day.id}" data-item-id="${item.id}" ${isAuto ? 'readonly tabindex="-1"' : ''}>
@@ -418,116 +414,86 @@
             `;
         };
 
-        // --- Render: Timeline Tab (Vertical Layout showing all text) ---
-        const renderTimelineContainer = () => {
-            return `
-                <div id="timeline-export-area" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-10 max-w-4xl mx-auto">
-                    ${generateTimelineHTML(false)}
-                </div>
-            `;
-        };
-
-        const generateTimelineHTML = (isExport = true) => {
-            recalculateTimings();
-            const daysHTML = state.days.map((day, index) => renderTimelineDay(day, index)).join('');
-            
-            return `
-                <div class="text-slate-800" dir="${state.lang === 'ar' ? 'rtl' : 'ltr'}" style="${isExport ? `font-family: ${state.lang === 'ar' ? "'Cairo', sans-serif" : "'Inter', sans-serif"};` : ''}">
-                    <div class="text-center mb-12 border-b-2 border-slate-100 pb-8">
-                        <h2 class="text-3xl font-bold text-slate-800 mb-2">${state.title || t('appTitle')}</h2>
-                        <p class="text-slate-500 flex items-center justify-center gap-2 font-medium">
-                            <i data-lucide="split-square-vertical" class="w-4 h-4"></i> ${t('tabTimeline')}
-                        </p>
-                    </div>
-                    <div class="space-y-16">
-                        ${daysHTML}
-                    </div>
-                </div>
-            `;
-        };
-
-        const renderTimelineDay = (day, index) => {
-            const totalMins = day._totalDuration > 0 ? day._totalDuration : 1;
-            
-            // 1. Proportional Visualizer Bar (Top)
-            const barBlocks = day.items.map(item => {
-                const widthPercent = Math.max(0.5, (item.duration / totalMins) * 100);
-                const color = item.color || defaultColors[item.type];
-                return `<div class="h-full border-e border-white/30 last:border-0" style="width: ${widthPercent}%; background-color: ${color};" title="${item.title}"></div>`;
-            }).join('');
-
-            // 2. Full Text Vertical Nodes (Bottom)
-            const listItems = day.items.map((item, idx) => {
-                const color = item.color || defaultColors[item.type];
-                const isLast = idx === day.items.length - 1;
+        // --- Render: Timeline Tab (On-Screen using Tailwind) ---
+        const renderTimelineScreen = () => {
+            const daysHTML = state.days.map((day, index) => {
+                const totalMins = day._totalDuration > 0 ? day._totalDuration : 1;
                 
+                const barBlocks = day.items.map(item => {
+                    const widthPercent = Math.max(0.5, (item.duration / totalMins) * 100);
+                    const color = item.color || defaultColors[item.type];
+                    return `<div class="h-full border-e border-white/30 last:border-0" style="width: ${widthPercent}%; background-color: ${color};" title="${item.title}"></div>`;
+                }).join('');
+
+                const listItems = day.items.map((item, idx) => {
+                    const color = item.color || defaultColors[item.type];
+                    const isLast = idx === day.items.length - 1;
+                    return `
+                        <div class="relative flex items-stretch gap-4 mb-4 group">
+                            <!-- Line and Dot -->
+                            <div class="relative flex flex-col items-center w-6 shrink-0">
+                                <div class="w-4 h-4 rounded-full mt-2 z-10" style="background-color: ${color}; outline: 3px solid white; box-shadow: 0 0 0 4px ${color}20;"></div>
+                                ${!isLast ? `<div class="w-0.5 bg-slate-200 absolute top-7 bottom-[-24px] z-0"></div>` : ''}
+                            </div>
+                            
+                            <!-- Content Card -->
+                            <div class="flex-1 bg-white border border-slate-100 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                                <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-2">
+                                    <h4 class="font-bold text-slate-800 text-lg break-words leading-tight">${item.title || t('session')}</h4>
+                                    <span class="text-sm font-bold text-slate-600 bg-slate-50 border border-slate-100 px-3 py-1 rounded-md shrink-0 text-center" dir="ltr">
+                                        ${item._calculatedStart} - ${item._calculatedEnd}<br>
+                                        <span class="text-xs font-normal text-slate-400">(${item.duration}m)</span>
+                                    </span>
+                                </div>
+                                ${item.desc ? `<p class="text-slate-500 text-sm whitespace-pre-wrap leading-relaxed">${item.desc}</p>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
                 return `
-                    <div class="relative flex items-start gap-4 mb-4 group page-break-inside-avoid" style="page-break-inside: avoid;">
-                        <!-- Line and Dot -->
-                        <div class="relative flex flex-col items-center w-6 shrink-0 h-full">
-                            <div class="w-4 h-4 rounded-full mt-1.5 z-10" style="background-color: ${color}; outline: 3px solid white; box-shadow: 0 0 0 4px ${color}20;"></div>
-                            ${!isLast ? `<div class="w-0.5 bg-slate-200 absolute top-6 bottom-[-24px] z-0"></div>` : ''}
+                    <div class="mb-12 page-break-inside-avoid">
+                        <div class="flex flex-wrap items-center gap-3 border-b-2 border-slate-100 pb-4 mb-6">
+                            <span class="bg-primary text-white px-3 py-1 rounded-md text-sm font-bold shadow-sm">${t('day')} ${index + 1}</span>
+                            <h3 class="text-xl font-bold text-slate-800 break-words">${day.title}</h3>
+                            <span class="text-sm font-semibold text-slate-400 ms-auto bg-slate-50 px-3 py-1 rounded-full border border-slate-200" dir="ltr">
+                                ${day.startTime} - ${day.endTime}
+                            </span>
                         </div>
                         
-                        <!-- Content Card -->
-                        <div class="flex-1 bg-white border border-slate-100 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
-                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
-                                <h4 class="font-bold text-slate-800 text-lg">${item.title || t('session')}</h4>
-                                <span class="text-xs sm:text-sm font-semibold text-slate-600 bg-slate-50 border border-slate-100 px-2 py-1 rounded w-fit shrink-0" dir="ltr">${item._calculatedStart} - ${item._calculatedEnd} (${item.duration}m)</span>
-                            </div>
-                            ${item.desc ? `<p class="text-slate-500 text-sm whitespace-pre-wrap mt-2 leading-relaxed">${item.desc}</p>` : ''}
+                        <div class="w-full h-5 sm:h-6 bg-slate-100 rounded-full overflow-hidden flex shadow-inner mb-8 border border-slate-200">
+                            ${day.items.length > 0 ? barBlocks : `<div class="w-full h-full flex items-center justify-center text-slate-400 text-xs">...</div>`}
                         </div>
+
+                        <div class="relative ms-1 sm:ms-2">${listItems}</div>
                     </div>
                 `;
             }).join('');
 
             return `
-                <div class="timeline-day page-break-inside-avoid" style="page-break-inside: avoid;">
-                    <div class="flex flex-wrap items-center gap-3 border-b-2 border-slate-100 pb-4 mb-6">
-                        <span class="bg-primary text-white px-3 py-1 rounded-md text-sm font-bold shadow-sm">${t('day')} ${index + 1}</span>
-                        <h3 class="text-xl font-bold text-slate-800">${day.title}</h3>
-                        <span class="text-sm font-semibold text-slate-400 ms-auto bg-slate-50 px-3 py-1 rounded-full border border-slate-200" dir="ltr">
-                            ${day.startTime} - ${day.endTime}
-                        </span>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-10 max-w-4xl mx-auto">
+                    <div class="text-center mb-12 border-b-2 border-slate-100 pb-8">
+                        <h2 class="text-3xl font-bold text-slate-800 mb-2 break-words">${state.title || t('appTitle')}</h2>
+                        <p class="text-slate-500 flex items-center justify-center gap-2 font-medium">
+                            <i data-lucide="split-square-vertical" class="w-4 h-4"></i> ${t('tabTimeline')}
+                        </p>
                     </div>
-                    
-                    <!-- Proportional Bar -->
-                    <div class="w-full h-5 sm:h-6 bg-slate-100 rounded-full overflow-hidden flex shadow-inner mb-8 border border-slate-200">
-                        ${day.items.length > 0 ? barBlocks : `<div class="w-full h-full flex items-center justify-center text-slate-400 text-xs">...</div>`}
-                    </div>
-
-                    <!-- Vertical Detailed Nodes -->
-                    <div class="relative ms-1 sm:ms-2">
-                        ${listItems}
-                    </div>
+                    <div>${daysHTML}</div>
                 </div>
             `;
         };
 
-        // --- 5. Event Listeners & Interactions ---
+        // --- 5. Event Listeners ---
         const initSortables = () => {
             sortableInstances.forEach(s => s.destroy());
             sortableInstances = [];
-
             document.querySelectorAll('.sortable-list').forEach(listEl => {
                 const sortable = Sortable.create(listEl, {
-                    group: 'agenda-items',
-                    animation: 150,
-                    handle: '.drag-handle',
-                    ghostClass: 'sortable-ghost',
-                    dragClass: 'sortable-drag',
+                    group: 'agenda-items', animation: 150, handle: '.drag-handle',
+                    ghostClass: 'sortable-ghost', dragClass: 'sortable-drag',
                     onEnd: function (evt) {
-                        const fromDayId = evt.from.dataset.dayId;
-                        const toDayId = evt.to.dataset.dayId;
-                        const oldIndex = evt.oldIndex;
-                        const newIndex = evt.newIndex;
-
-                        const fromDay = state.days.find(d => d.id === fromDayId);
-                        const item = fromDay.items.splice(oldIndex, 1)[0];
-
-                        const toDay = state.days.find(d => d.id === toDayId);
-                        toDay.items.splice(newIndex, 0, item);
-
+                        const item = state.days.find(d => d.id === evt.from.dataset.dayId).items.splice(evt.oldIndex, 1)[0];
+                        state.days.find(d => d.id === evt.to.dataset.dayId).items.splice(evt.newIndex, 0, item);
                         renderApp();
                     }
                 });
@@ -542,10 +508,8 @@
 
             container.addEventListener('input', (e) => {
                 const target = e.target;
-                const dayId = target.dataset.dayId;
-                const itemId = target.dataset.itemId;
-                const day = state.days.find(d => d.id === dayId);
-                let item = itemId ? day.items.find(i => i.id === itemId) : null;
+                const day = state.days.find(d => d.id === target.dataset.dayId);
+                const item = target.dataset.itemId ? day.items.find(i => i.id === target.dataset.itemId) : null;
 
                 if (target.classList.contains('day-title-input')) day.title = target.value;
                 if (target.classList.contains('item-title-input')) item.title = target.value;
@@ -558,11 +522,8 @@
 
             container.addEventListener('change', (e) => {
                 const target = e.target;
-                const dayId = target.dataset.dayId;
-                const itemId = target.dataset.itemId;
-                const day = state.days.find(d => d.id === dayId);
-                let item = itemId ? day.items.find(i => i.id === itemId) : null;
-
+                const day = state.days.find(d => d.id === target.dataset.dayId);
+                const item = target.dataset.itemId ? day.items.find(i => i.id === target.dataset.itemId) : null;
                 let needsRender = false;
 
                 if (target.classList.contains('day-start-input')) { day.startTime = target.value; needsRender = true; }
@@ -574,105 +535,72 @@
                     if (target.classList.contains('item-color-input')) { item.color = target.value; needsRender = true; }
                     if (target.classList.contains('item-type-select')) { 
                         item.type = target.value; 
-                        item.color = defaultColors[item.type]; // Reset color to default for new type
+                        item.color = defaultColors[item.type]; 
                         needsRender = true; 
                     }
                 }
-
                 if(needsRender) renderApp();
             });
         };
 
-        // --- Actions ---
         const addDay = () => {
-            state.days.push({
-                id: generateId(),
-                title: `${t('day')} ${state.days.length + 1}`,
-                startTime: "09:00",
-                endTime: "16:00",
-                autoAdjust: false,
-                items: []
-            });
+            state.days.push({ id: generateId(), title: `${t('day')} ${state.days.length + 1}`, startTime: "09:00", endTime: "16:00", autoAdjust: false, items: [] });
             renderApp();
         };
-
-        const deleteDay = (id) => {
-            if(confirm(t('deleteConfirm'))) {
-                state.days = state.days.filter(d => d.id !== id);
-                renderApp();
-            }
-        };
-
+        const deleteDay = (id) => { if(confirm(t('deleteConfirm'))) { state.days = state.days.filter(d => d.id !== id); renderApp(); } };
         const addItem = (dayId, type) => {
-            const day = state.days.find(d => d.id === dayId);
-            day.items.push({
-                id: generateId(),
-                title: type === 'session' ? t('session') : t('break'),
-                type: type,
-                duration: type === 'session' ? 60 : 15,
-                desc: "",
-                color: defaultColors[type]
-            });
+            state.days.find(d => d.id === dayId).items.push({ id: generateId(), title: type === 'session' ? t('session') : t('break'), type: type, duration: type === 'session' ? 60 : 15, desc: "", color: defaultColors[type] });
             renderApp();
         };
-
         const deleteItem = (dayId, itemId) => {
             const day = state.days.find(d => d.id === dayId);
             day.items = day.items.filter(i => i.id !== itemId);
             renderApp();
         };
 
-        // --- 6. Import/Export Data ---
         const exportJSON = () => {
             state.title = document.getElementById('project-title').value;
             const dataStr = JSON.stringify(state, null, 2);
             const blob = new Blob([dataStr], {type: "application/json"});
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = `Agenda_${state.title.replace(/\s+/g, '_')}.json`;
-            a.click();
+            a.href = url; a.download = `Agenda_${state.title.replace(/\s+/g, '_')}.json`; a.click();
             URL.revokeObjectURL(url);
             showToast(t('exported'));
         };
-
         const importJSON = (e) => {
             const file = e.target.files[0];
             if (!file) return;
             const reader = new FileReader();
             reader.onload = (event) => {
-                try {
-                    const data = JSON.parse(event.target.result);
-                    if(data.days) { state = data; renderApp(); showToast(t('imported')); }
-                } catch (err) { alert("Invalid JSON"); }
+                try { const data = JSON.parse(event.target.result); if(data.days) { state = data; renderApp(); showToast(t('imported')); } } 
+                catch (err) { alert("Invalid JSON"); }
             };
-            reader.readAsText(file);
-            e.target.value = '';
+            reader.readAsText(file); e.target.value = '';
         };
 
-        // --- 7. PDF Generators ---
-        const getPdfContainer = () => {
-            let container = document.getElementById('pdf-hidden-container');
-            if (!container) {
-                container = document.createElement('div');
-                container.id = 'pdf-hidden-container';
-                // Move off-screen but keep layout computed
-                container.style.position = 'absolute';
-                container.style.top = '-9999px';
-                container.style.width = '800px'; 
-                container.style.backgroundColor = '#ffffff';
-                document.body.appendChild(container);
-            }
-            return container;
-        };
+        // --- 7. PDF Generators (STRICT INLINE CSS) ---
+        // By using exact inline CSS, we bypass Tailwind CDN limitations for html2pdf completely.
 
-        // PDF 1: Syllabus (Table format)
-        const generateSyllabusHTML = () => {
+        const getBasePDFStyles = () => `
+            font-family: ${state.lang === 'ar' ? "'Cairo', sans-serif" : "'Inter', sans-serif"}; 
+            direction: ${state.lang === 'ar' ? 'rtl' : 'ltr'}; 
+            color: #1e293b; 
+            padding: 40px; 
+            background: #ffffff;
+            line-height: 1.5;
+            box-sizing: border-box;
+        `;
+
+        const exportSyllabusPDF = () => {
+            showToast(t('pdfGen'));
             recalculateTimings();
+            state.title = document.getElementById('project-title').value;
+            
             let html = `
-                <div style="font-family: ${state.lang === 'ar' ? "'Cairo', sans-serif" : "'Inter', sans-serif"}; direction: ${state.lang === 'ar' ? 'rtl' : 'ltr'}; color: #333; padding: 40px;">
+                <div style="${getBasePDFStyles()}">
                     <div style="text-align: center; margin-bottom: 40px; border-bottom: 2px solid #4f46e5; padding-bottom: 20px;">
-                        <h1 style="color: #1e293b; margin: 0 0 10px 0; font-size: 28px;">${state.title || t('appTitle')}</h1>
+                        <h1 style="color: #0f172a; margin: 0 0 10px 0; font-size: 28px; font-weight: bold;">${state.title || t('appTitle')}</h1>
                         <p style="color: #64748b; margin: 0; font-size: 16px;">Syllabus</p>
                     </div>
             `;
@@ -680,15 +608,15 @@
             state.days.forEach((day, index) => {
                 html += `
                     <div style="margin-bottom: 40px; page-break-inside: avoid;">
-                        <h2 style="color: #4f46e5; border-bottom: 2px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 15px; font-size: 20px; display: flex; justify-content: space-between;">
-                            <span>${t('day')} ${index + 1}: ${day.title}</span>
-                            <span style="font-size: 14px; color: #64748b; font-weight: normal;">${day.startTime} - ${day.endTime}</span>
-                        </h2>
+                        <div style="border-bottom: 2px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                            <h2 style="color: #4f46e5; margin: 0; font-size: 20px; font-weight: bold;">${t('day')} ${index + 1}: ${day.title}</h2>
+                            <span style="font-size: 14px; color: #64748b; direction: ltr; display: inline-block;">${day.startTime} - ${day.endTime}</span>
+                        </div>
                         <table style="width: 100%; border-collapse: collapse; font-size: 14px; text-align: ${state.lang === 'ar' ? 'right' : 'left'};">
                             <thead>
                                 <tr style="background-color: #f8fafc;">
-                                    <th style="padding: 12px; border-bottom: 2px solid #e2e8f0; width: 120px; color:#475569;">${t('startTime')}</th>
-                                    <th style="padding: 12px; border-bottom: 2px solid #e2e8f0; color:#475569;">Details</th>
+                                    <th style="padding: 12px; border-bottom: 2px solid #e2e8f0; width: 120px; color:#475569; font-weight: bold;">${t('startTime')}</th>
+                                    <th style="padding: 12px; border-bottom: 2px solid #e2e8f0; color:#475569; font-weight: bold;">Details</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -697,15 +625,16 @@
                 day.items.forEach(item => {
                     const color = item.color || defaultColors[item.type];
                     const bg = item.type === 'break' ? '#fef9c3' : '#ffffff';
+                    const borderSide = state.lang === 'ar' ? 'border-right' : 'border-left';
                     html += `
                         <tr style="background-color: ${bg}; border-bottom: 1px solid #e2e8f0; page-break-inside: avoid;">
-                            <td style="padding: 12px; vertical-align: top; white-space: nowrap; border-inline-start: 4px solid ${color};">
-                                <strong style="color: #334155;">${item._calculatedStart}</strong><br>
-                                <span style="color: #94a3b8; font-size: 12px;">${item.duration}m</span>
+                            <td style="padding: 12px; vertical-align: top; white-space: nowrap; ${borderSide}: 4px solid ${color};">
+                                <strong style="color: #334155; font-size: 15px;">${item._calculatedStart}</strong><br>
+                                <span style="color: #64748b; font-size: 12px;">${item.duration}m</span>
                             </td>
                             <td style="padding: 12px; vertical-align: top;">
-                                <div style="font-weight: bold; color: #1e293b; margin-bottom: 4px; font-size: 15px;">${item.title || 'Untitled'}</div>
-                                ${item.desc ? `<div style="color: #64748b; line-height: 1.5; white-space: pre-wrap;">${item.desc}</div>` : ''}
+                                <div style="font-weight: bold; color: #0f172a; margin-bottom: 4px; font-size: 16px; word-break: break-word;">${item.title || 'Untitled'}</div>
+                                ${item.desc ? `<div style="color: #475569; white-space: pre-wrap; word-break: break-word;">${item.desc}</div>` : ''}
                             </td>
                         </tr>
                     `;
@@ -713,46 +642,109 @@
                 html += `</tbody></table></div>`;
             });
             html += `</div>`;
-            return html;
-        };
-
-        const exportSyllabusPDF = () => {
-            showToast(t('pdfGen'));
-            state.title = document.getElementById('project-title').value;
-            const container = getPdfContainer();
-            container.innerHTML = generateSyllabusHTML();
 
             const opt = {
-                margin: 0.5,
-                filename: `Syllabus_${state.title.replace(/\s+/g, '_')}.pdf`,
+                margin: 0.5, filename: `Syllabus_${state.title.replace(/\s+/g, '_')}.pdf`,
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2, useCORS: true },
                 jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
             };
-
-            html2pdf().set(opt).from(container).save().then(() => container.innerHTML = '');
+            
+            // Create temporary DOM node for direct export
+            const el = document.createElement('div'); el.innerHTML = html;
+            html2pdf().set(opt).from(el).save();
         };
 
-        // PDF 2: Timeline (Visual format)
         const exportTimelinePDF = () => {
             showToast(t('pdfGen'));
+            recalculateTimings();
             state.title = document.getElementById('project-title').value;
-            const container = getPdfContainer();
-            // Wrap the generated timeline in a padded container to look good on PDF
-            container.innerHTML = `<div style="padding: 40px; background: white;">${generateTimelineHTML(true)}</div>`;
 
-            // Since it relies on tailwind classes and icons, make sure we render icons in the hidden container
-            lucide.createIcons({ root: container });
+            let html = `
+                <div style="${getBasePDFStyles()}">
+                    <div style="text-align: center; margin-bottom: 40px; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px;">
+                        <h1 style="color: #0f172a; margin: 0 0 10px 0; font-size: 28px; font-weight: bold;">${state.title || t('appTitle')}</h1>
+                        <p style="color: #64748b; margin: 0; font-size: 16px;">Timeline View</p>
+                    </div>
+            `;
+
+            state.days.forEach((day, index) => {
+                const totalMins = day._totalDuration > 0 ? day._totalDuration : 1;
+                
+                // Day Header
+                html += `
+                    <div style="margin-bottom: 40px; page-break-inside: avoid;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px; margin-bottom: 20px;">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <span style="background-color: #4f46e5; color: white; padding: 4px 12px; border-radius: 6px; font-size: 14px; font-weight: bold;">${t('day')} ${index + 1}</span>
+                                <h3 style="margin: 0; font-size: 20px; font-weight: bold; color: #0f172a; word-break: break-word;">${day.title}</h3>
+                            </div>
+                            <span style="font-size: 14px; color: #64748b; border: 1px solid #e2e8f0; padding: 4px 12px; border-radius: 20px; background-color: #f8fafc; direction: ltr; display: inline-block;">${day.startTime} - ${day.endTime}</span>
+                        </div>
+                `;
+
+                // Proportional Bar
+                let blocks = '';
+                day.items.forEach(item => {
+                    const widthPercent = Math.max(0.5, (item.duration / totalMins) * 100);
+                    const color = item.color || defaultColors[item.type];
+                    const borderSide = state.lang === 'ar' ? 'border-left' : 'border-right';
+                    blocks += `<div style="width: ${widthPercent}%; height: 100%; background-color: ${color}; box-sizing: border-box; ${borderSide}: 1px solid rgba(255,255,255,0.3);"></div>`;
+                });
+                
+                html += `
+                        <div style="width: 100%; height: 24px; background-color: #f1f5f9; border-radius: 12px; display: flex; overflow: hidden; margin-bottom: 24px; border: 1px solid #e2e8f0;">
+                            ${day.items.length > 0 ? blocks : ''}
+                        </div>
+                `;
+
+                // Vertical Nodes
+                const isAr = state.lang === 'ar';
+                day.items.forEach((item, idx) => {
+                    const color = item.color || defaultColors[item.type];
+                    const isLast = idx === day.items.length - 1;
+                    
+                    const flexDir = isAr ? 'row-reverse' : 'row';
+                    const nodeMargin = isAr ? 'margin-left: 16px;' : 'margin-right: 16px;';
+                    const borderProp = isAr ? 'border-right' : 'border-left';
+
+                    html += `
+                        <div style="display: flex; align-items: stretch; margin-bottom: 16px; page-break-inside: avoid; flex-direction: ${flexDir};">
+                            
+                            <!-- Timeline Line & Dot -->
+                            <div style="width: 24px; display: flex; flex-direction: column; align-items: center; position: relative; flex-shrink: 0; ${nodeMargin}">
+                                <div style="width: 16px; height: 16px; border-radius: 50%; background-color: ${color}; border: 3px solid white; box-shadow: 0 0 0 2px #e2e8f0; margin-top: 6px; z-index: 10;"></div>
+                                ${!isLast ? `<div style="width: 2px; background-color: #e2e8f0; position: absolute; top: 26px; bottom: -20px; z-index: 0;"></div>` : ''}
+                            </div>
+
+                            <!-- Content -->
+                            <div style="flex: 1; background-color: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); text-align: ${isAr ? 'right' : 'left'};">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; flex-direction: ${flexDir};">
+                                    <h4 style="margin: 0; font-size: 18px; font-weight: bold; color: #0f172a; word-break: break-word;">${item.title || t('session')}</h4>
+                                    <div style="font-size: 14px; font-weight: bold; color: #475569; background-color: #f8fafc; border: 1px solid #f1f5f9; padding: 4px 8px; border-radius: 6px; text-align: center; flex-shrink: 0; margin: 0 8px; direction: ltr;">
+                                        ${item._calculatedStart} - ${item._calculatedEnd} <br>
+                                        <span style="font-size: 12px; font-weight: normal; color: #94a3b8;">(${item.duration}m)</span>
+                                    </div>
+                                </div>
+                                ${item.desc ? `<p style="margin: 0; font-size: 14px; color: #475569; white-space: pre-wrap; word-break: break-word;">${item.desc}</p>` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+            });
+            html += `</div>`;
 
             const opt = {
-                margin: 0.5,
-                filename: `Timeline_${state.title.replace(/\s+/g, '_')}.pdf`,
+                margin: 0.5, filename: `Timeline_${state.title.replace(/\s+/g, '_')}.pdf`,
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2, useCORS: true, letterRendering: true },
                 jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
             };
-
-            html2pdf().set(opt).from(container).save().then(() => container.innerHTML = '');
+            
+            // Create temporary DOM node for direct export
+            const el = document.createElement('div'); el.innerHTML = html;
+            html2pdf().set(opt).from(el).save();
         };
 
         // --- Initialize ---
