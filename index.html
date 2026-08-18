@@ -8,7 +8,7 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- SortableJS for Drag and Drop -->
+    <!-- SortableJS for Drag and Drop (Touch optimized version) -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     
     <!-- html2pdf for PDF Export -->
@@ -46,15 +46,19 @@
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         
-        .drag-handle { cursor: grab; }
+        .drag-handle { cursor: grab; touch-action: none; }
         .drag-handle:active { cursor: grabbing; }
         .sortable-ghost { opacity: 0.4; background-color: #f8fafc; border: 2px dashed #cbd5e1; }
         .sortable-drag { cursor: grabbing !important; }
         
+        /* Mobile Input Improvements */
         input[type="number"]::-webkit-inner-spin-button, 
         input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         input[type="number"] { -moz-appearance: textfield; }
+        
+        button { touch-action: manipulation; }
 
+        /* Custom Color Picker Styling */
         input[type="color"] {
             -webkit-appearance: none;
             border: none;
@@ -69,16 +73,16 @@
 
     <div id="app"></div>
 
-    <!-- EXPORT OVERLAY (Fixes Blank PDF issue by physically rendering the DOM) -->
-    <div id="export-overlay" class="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[9999] hidden flex-col items-center overflow-y-auto py-10">
+    <!-- EXPORT OVERLAY (Fixes Blank PDF issue and respects Arabic Layout) -->
+    <div id="export-overlay" class="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[9999] hidden flex-col items-center overflow-y-auto py-10">
         <!-- Loading Modal -->
-        <div class="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center mb-8 sticky top-10 z-50">
+        <div class="bg-white p-6 md:p-8 rounded-2xl shadow-2xl flex flex-col items-center mb-8 sticky top-10 z-50 text-center mx-4">
             <i data-lucide="loader-2" class="w-12 h-12 text-primary animate-spin mb-4"></i>
-            <h2 class="text-2xl font-bold text-slate-800" id="export-overlay-text">Generating PDF...</h2>
-            <p class="text-slate-500 text-sm mt-2">Please wait while we format your document.</p>
+            <h2 class="text-xl md:text-2xl font-bold text-slate-800" id="export-overlay-text">Generating PDF... / جاري إنشاء ملف PDF</h2>
+            <p class="text-slate-500 text-sm mt-2">Please wait. This ensures mobile and Arabic layouts are perfect.</p>
         </div>
         <!-- Actual Render Container for HTML2PDF -->
-        <div id="pdf-render-container" class="bg-white shadow-2xl shrink-0" style="width: 800px; min-height: 1000px;"></div>
+        <div id="pdf-render-container" class="bg-white shadow-2xl shrink-0" style="width: 800px; min-height: 1056px;"></div>
     </div>
 
     <!-- Notification Toast -->
@@ -93,7 +97,7 @@
             en: {
                 appTitle: "Project Title",
                 import: "Import",
-                exportJson: "Export JSON",
+                exportJson: "Save JSON",
                 exportSyllabus: "Syllabus PDF",
                 exportTimeline: "Timeline PDF",
                 tabBuilder: "Agenda Builder",
@@ -103,8 +107,8 @@
                 startTime: "Start Time",
                 endTime: "End Time",
                 autoAdjust: "Auto-adjust durations to fit End Time",
-                addSession: "Add Session",
-                addBreak: "Add Break",
+                addSession: "Session",
+                addBreak: "Break",
                 session: "Session",
                 break: "Break",
                 logistic: "Logistic",
@@ -121,7 +125,7 @@
             ar: {
                 appTitle: "عنوان المشروع",
                 import: "استيراد",
-                exportJson: "تصدير JSON",
+                exportJson: "حفظ JSON",
                 exportSyllabus: "PDF المنهج",
                 exportTimeline: "PDF المخطط",
                 tabBuilder: "باني الجدول",
@@ -131,8 +135,8 @@
                 startTime: "وقت البدء",
                 endTime: "وقت الانتهاء",
                 autoAdjust: "ضبط المدة تلقائياً لتناسب وقت الانتهاء",
-                addSession: "إضافة جلسة",
-                addBreak: "إضافة استراحة",
+                addSession: "جلسة",
+                addBreak: "استراحة",
                 session: "جلسة",
                 break: "استراحة",
                 logistic: "لوجستي",
@@ -238,33 +242,33 @@
             const app = document.getElementById('app');
             app.innerHTML = `
                 <header class="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm">
-                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col xl:flex-row justify-between items-center gap-4">
-                        <div class="flex items-center gap-3 w-full xl:w-auto">
-                            <div class="bg-primary p-2 rounded-lg text-white shrink-0 shadow-sm">
-                                <i data-lucide="calendar-clock"></i>
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 lg:py-4 flex flex-col lg:flex-row justify-between items-center gap-4">
+                        <div class="flex items-center gap-3 w-full lg:w-auto">
+                            <div class="bg-primary p-2 md:p-3 rounded-lg text-white shrink-0 shadow-sm">
+                                <i data-lucide="calendar-clock" class="w-5 h-5 md:w-6 md:h-6"></i>
                             </div>
-                            <input type="text" id="project-title" value="${state.title}" class="text-xl md:text-2xl font-bold text-slate-800 bg-transparent border-b-2 border-transparent hover:border-slate-300 focus:border-primary focus:outline-none transition-colors w-full xl:w-80" placeholder="${t('appTitle')}">
+                            <input type="text" id="project-title" value="${state.title}" class="text-lg md:text-2xl font-bold text-slate-800 bg-transparent border-b-2 border-transparent hover:border-slate-300 focus:border-primary focus:outline-none transition-colors w-full lg:w-80 min-w-0" placeholder="${t('appTitle')}">
                         </div>
                         
-                        <div class="flex flex-wrap items-center gap-2 text-sm justify-center">
-                            <button onclick="toggleLang()" class="px-3 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md font-medium border border-slate-200">${state.lang === 'en' ? 'عربي' : 'English'}</button>
+                        <div class="flex flex-wrap items-center gap-2 text-sm justify-center w-full lg:w-auto">
+                            <button onclick="toggleLang()" class="px-3 md:px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md font-medium border border-slate-200 transition-colors">${state.lang === 'en' ? 'عربي' : 'English'}</button>
                             <input type="file" id="import-file" accept=".json" class="hidden" onchange="importJSON(event)">
                             <button onclick="document.getElementById('import-file').click()" class="flex items-center gap-2 px-3 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors border border-slate-200" title="${t('import')}">
-                                <i data-lucide="upload" class="w-4 h-4"></i> <span class="hidden md:inline">${t('import')}</span>
+                                <i data-lucide="upload" class="w-4 h-4"></i> <span class="hidden sm:inline">${t('import')}</span>
                             </button>
                             <button onclick="exportJSON()" class="flex items-center gap-2 px-3 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors border border-slate-200" title="${t('exportJson')}">
-                                <i data-lucide="download" class="w-4 h-4"></i> <span class="hidden md:inline">${t('exportJson')}</span>
+                                <i data-lucide="download" class="w-4 h-4"></i> <span class="hidden sm:inline">${t('exportJson')}</span>
                             </button>
-                            <button onclick="exportSyllabusPDF()" id="btn-export-syllabus" class="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md shadow-sm transition-colors font-medium">
+                            <button onclick="exportSyllabusPDF()" id="btn-export-syllabus" class="flex-1 sm:flex-none justify-center items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md shadow-sm transition-colors font-medium flex">
                                 <i data-lucide="file-text" class="w-4 h-4"></i> <span>${t('exportSyllabus')}</span>
                             </button>
-                            <button onclick="exportTimelinePDF()" id="btn-export-timeline" class="flex items-center gap-2 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-md shadow-sm transition-colors font-medium">
+                            <button onclick="exportTimelinePDF()" id="btn-export-timeline" class="flex-1 sm:flex-none justify-center items-center gap-2 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-md shadow-sm transition-colors font-medium flex">
                                 <i data-lucide="presentation" class="w-4 h-4"></i> <span>${t('exportTimeline')}</span>
                             </button>
                         </div>
                     </div>
                     
-                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-6 mt-2">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-6 mt-1 overflow-x-auto whitespace-nowrap hide-scroll">
                         <button onclick="switchTab('builder')" class="py-3 px-1 border-b-2 font-medium text-sm transition-colors ${state.tab === 'builder' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}">
                             <div class="flex items-center gap-2"><i data-lucide="layout-list" class="w-4 h-4"></i> ${t('tabBuilder')}</div>
                         </button>
@@ -274,7 +278,7 @@
                     </div>
                 </header>
 
-                <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
                     ${state.tab === 'builder' ? renderBuilder() : renderTimelineScreen()}
                 </main>
             `;
@@ -292,8 +296,8 @@
         const renderBuilder = () => {
             return `
                 <div class="flex justify-end mb-6">
-                    <button onclick="addDay()" class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 hover:border-primary hover:text-primary text-slate-700 rounded-md shadow-sm transition-colors font-medium">
-                        <i data-lucide="plus-circle" class="w-4 h-4"></i> ${t('addDay')}
+                    <button onclick="addDay()" class="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-300 hover:border-primary hover:text-primary text-slate-700 rounded-md shadow-sm transition-colors font-bold text-sm">
+                        <i data-lucide="plus-circle" class="w-5 h-5"></i> ${t('addDay')}
                     </button>
                 </div>
                 <div id="days-container" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
@@ -307,39 +311,39 @@
                 <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full max-h-[85vh]">
                     <div class="bg-slate-50 p-4 border-b border-slate-200 sticky top-0 z-10">
                         <div class="flex justify-between items-start mb-3">
-                            <div class="flex-1">
+                            <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-2 mb-2">
                                     <span class="bg-primary/10 text-primary text-xs font-bold px-2 py-1 rounded whitespace-nowrap">${t('day')} ${index + 1}</span>
-                                    <input type="text" class="font-bold text-lg text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none w-full day-title-input" value="${day.title}" data-day-id="${day.id}">
+                                    <input type="text" class="font-bold text-lg md:text-xl text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none w-full min-w-0 day-title-input" value="${day.title}" data-day-id="${day.id}">
                                 </div>
                             </div>
-                            <button class="text-slate-400 hover:text-red-500 p-1 ms-2 transition-colors" onclick="deleteDay('${day.id}')"><i data-lucide="x" class="w-5 h-5"></i></button>
+                            <button class="text-slate-400 hover:text-red-500 p-2 -mr-2 ms-2 transition-colors rounded-full hover:bg-red-50" onclick="deleteDay('${day.id}')"><i data-lucide="x" class="w-5 h-5"></i></button>
                         </div>
                         
-                        <div class="grid grid-cols-2 gap-4 bg-white p-3 rounded-lg border border-slate-200 mb-3 text-sm">
+                        <div class="grid grid-cols-2 gap-3 bg-white p-3 rounded-lg border border-slate-200 mb-3 text-sm">
                             <div>
-                                <label class="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">${t('startTime')}</label>
-                                <input type="time" class="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary day-start-input" value="${day.startTime}" data-day-id="${day.id}">
+                                <label class="block text-[11px] font-bold text-slate-400 mb-1 uppercase tracking-wider">${t('startTime')}</label>
+                                <input type="time" class="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 md:py-1 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary day-start-input" value="${day.startTime}" data-day-id="${day.id}">
                             </div>
                             <div>
-                                <label class="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">${t('endTime')} ${!day.autoAdjust ? '(Auto)' : ''}</label>
-                                <input type="time" class="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary day-end-input" value="${day.endTime}" data-day-id="${day.id}" ${!day.autoAdjust ? 'readonly disabled class="opacity-60"' : ''}>
+                                <label class="block text-[11px] font-bold text-slate-400 mb-1 uppercase tracking-wider">${t('endTime')} ${!day.autoAdjust ? '(Auto)' : ''}</label>
+                                <input type="time" class="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 md:py-1 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary day-end-input" value="${day.endTime}" data-day-id="${day.id}" ${!day.autoAdjust ? 'readonly disabled class="opacity-60"' : ''}>
                             </div>
                         </div>
                         
-                        <label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer p-1 hover:bg-slate-100 rounded transition-colors w-fit">
-                            <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary day-auto-checkbox" data-day-id="${day.id}" ${day.autoAdjust ? 'checked' : ''}>
+                        <label class="flex items-center gap-2 text-xs md:text-sm font-medium text-slate-600 cursor-pointer p-1 hover:bg-slate-100 rounded transition-colors w-fit">
+                            <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary w-4 h-4 day-auto-checkbox" data-day-id="${day.id}" ${day.autoAdjust ? 'checked' : ''}>
                             ${t('autoAdjust')}
                         </label>
                     </div>
 
-                    <div class="p-4 flex-1 overflow-y-auto sortable-list" data-day-id="${day.id}">
-                        ${day.items.length === 0 ? `<div class="p-8 text-center text-slate-400 text-sm border-2 border-dashed border-slate-200 rounded-lg">${t('dragDropEmpty')}</div>` : day.items.map(item => renderItem(day, item)).join('')}
+                    <div class="p-3 md:p-4 flex-1 overflow-y-auto sortable-list min-h-[150px]" data-day-id="${day.id}">
+                        ${day.items.length === 0 ? `<div class="p-8 text-center text-slate-400 text-sm border-2 border-dashed border-slate-200 rounded-lg flex items-center justify-center h-full">${t('dragDropEmpty')}</div>` : day.items.map(item => renderItem(day, item)).join('')}
                     </div>
 
-                    <div class="p-4 border-t border-slate-100 bg-slate-50 flex gap-2">
-                        <button onclick="addItem('${day.id}', 'session')" class="flex-1 flex justify-center items-center gap-1 py-2 bg-white border border-slate-200 hover:border-primary hover:text-primary rounded-md text-sm font-medium text-slate-600 transition-colors shadow-sm"><i data-lucide="plus" class="w-4 h-4"></i> ${t('addSession')}</button>
-                        <button onclick="addItem('${day.id}', 'break')" class="flex-1 flex justify-center items-center gap-1 py-2 bg-white border border-slate-200 hover:border-amber-500 hover:text-amber-600 rounded-md text-sm font-medium text-slate-600 transition-colors shadow-sm"><i data-lucide="coffee" class="w-4 h-4"></i> ${t('addBreak')}</button>
+                    <div class="p-3 md:p-4 border-t border-slate-100 bg-slate-50 flex gap-2 sm:gap-3">
+                        <button onclick="addItem('${day.id}', 'session')" class="flex-1 flex justify-center items-center gap-1.5 py-2.5 bg-white border border-slate-200 hover:border-primary hover:text-primary rounded-md text-sm font-bold text-slate-600 transition-colors shadow-sm"><i data-lucide="plus" class="w-4 h-4"></i> ${t('addSession')}</button>
+                        <button onclick="addItem('${day.id}', 'break')" class="flex-1 flex justify-center items-center gap-1.5 py-2.5 bg-white border border-slate-200 hover:border-amber-500 hover:text-amber-600 rounded-md text-sm font-bold text-slate-600 transition-colors shadow-sm"><i data-lucide="coffee" class="w-4 h-4"></i> ${t('addBreak')}</button>
                     </div>
                 </div>
             `;
@@ -350,34 +354,35 @@
             const currentColor = item.color || defaultColors[item.type];
             return `
                 <div class="group relative bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md transition-all mb-3 overflow-hidden border-s-4" style="border-inline-start-color: ${currentColor}" data-item-id="${item.id}">
-                    <div class="p-3 flex items-start gap-2">
-                        <div class="drag-handle mt-1 text-slate-300 hover:text-slate-500 p-1 shrink-0"><i data-lucide="grip-vertical" class="w-5 h-5"></i></div>
-                        <div class="flex flex-col items-center justify-center min-w-[65px] mt-1 shrink-0 bg-slate-50 rounded py-1 px-2 border border-slate-100">
+                    <div class="p-2 md:p-3 flex items-start gap-1.5 md:gap-2">
+                        <div class="drag-handle mt-1 text-slate-300 hover:text-slate-500 p-1 md:p-1.5 shrink-0 rounded hover:bg-slate-50 active:bg-slate-100"><i data-lucide="grip-vertical" class="w-5 h-5"></i></div>
+                        <div class="flex flex-col items-center justify-center min-w-[55px] md:min-w-[65px] mt-1 shrink-0 bg-slate-50 rounded py-1 px-1.5 md:px-2 border border-slate-100">
                             <span class="text-xs font-bold text-slate-700">${item._calculatedStart}</span>
                             <span class="text-[10px] text-slate-400 my-0.5">${t('to')}</span>
                             <span class="text-xs font-bold text-slate-600">${item._calculatedEnd}</span>
                         </div>
-                        <div class="flex-1 min-w-0 ms-1">
-                            <div class="flex flex-wrap items-center gap-2 mb-2">
-                                <input type="text" class="font-bold text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none flex-1 min-w-[120px] text-sm item-title-input" value="${item.title}" placeholder="${t('titlePlaceholder')}" data-day-id="${day.id}" data-item-id="${item.id}">
-                                <div class="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-200 shrink-0">
-                                    <input type="color" value="${currentColor}" class="item-color-input w-5 h-5 rounded cursor-pointer shrink-0" data-day-id="${day.id}" data-item-id="${item.id}" title="${t('color')}">
+                        <div class="flex-1 min-w-0 ms-1 flex flex-col gap-1.5">
+                            <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                                <input type="text" class="font-bold text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none flex-1 min-w-0 text-sm md:text-base py-0.5 item-title-input" value="${item.title}" placeholder="${t('titlePlaceholder')}" data-day-id="${day.id}" data-item-id="${item.id}">
+                                
+                                <div class="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-200 shrink-0 w-fit">
+                                    <input type="color" value="${currentColor}" class="item-color-input w-5 h-5 md:w-6 md:h-6 rounded cursor-pointer shrink-0" data-day-id="${day.id}" data-item-id="${item.id}" title="${t('color')}">
                                     <div class="w-px h-4 bg-slate-300"></div>
-                                    <select class="text-xs bg-transparent text-slate-600 focus:outline-none focus:text-primary item-type-select font-medium cursor-pointer" data-day-id="${day.id}" data-item-id="${item.id}">
+                                    <select class="text-xs md:text-sm bg-transparent text-slate-600 focus:outline-none focus:text-primary item-type-select font-medium cursor-pointer py-1" data-day-id="${day.id}" data-item-id="${item.id}">
                                         <option value="session" ${item.type === 'session' ? 'selected' : ''}>${t('session')}</option>
                                         <option value="break" ${item.type === 'break' ? 'selected' : ''}>${t('break')}</option>
                                         <option value="logistic" ${item.type === 'logistic' ? 'selected' : ''}>${t('logistic')}</option>
                                     </select>
                                 </div>
                             </div>
-                            <textarea class="text-xs text-slate-500 bg-transparent border border-transparent hover:border-slate-200 focus:border-primary rounded p-1 focus:outline-none w-full resize-none item-desc-input" rows="1" placeholder="${t('descPlaceholder')}" data-day-id="${day.id}" data-item-id="${item.id}">${item.desc || ''}</textarea>
+                            <textarea class="text-xs md:text-sm text-slate-500 bg-transparent border border-transparent hover:border-slate-200 focus:border-primary rounded p-1.5 focus:outline-none w-full resize-none item-desc-input" rows="1" placeholder="${t('descPlaceholder')}" data-day-id="${day.id}" data-item-id="${item.id}">${item.desc || ''}</textarea>
                         </div>
-                        <div class="flex flex-col items-end gap-2 shrink-0">
+                        <div class="flex flex-col items-end justify-between h-full shrink-0 ms-1 gap-2">
                             <div class="flex items-center bg-slate-50 border border-slate-200 rounded overflow-hidden ${isAuto ? 'opacity-60' : ''}" title="${isAuto ? 'Calculated automatically' : t('duration')}">
-                                <input type="number" class="w-12 text-center py-1 text-xs font-semibold focus:outline-none focus:bg-white item-duration-input" value="${item.duration}" min="0" data-day-id="${day.id}" data-item-id="${item.id}" ${isAuto ? 'readonly tabindex="-1"' : ''}>
-                                <span class="px-1.5 text-[10px] font-medium text-slate-500 bg-slate-100 border-s border-slate-200 py-1.5">m</span>
+                                <input type="number" class="w-10 md:w-12 text-center py-1.5 md:py-1 text-xs font-semibold focus:outline-none focus:bg-white item-duration-input" value="${item.duration}" min="0" data-day-id="${day.id}" data-item-id="${item.id}" ${isAuto ? 'readonly tabindex="-1"' : ''}>
+                                <span class="px-1.5 text-[10px] font-medium text-slate-500 bg-slate-100 border-s border-slate-200 py-2 md:py-1.5">m</span>
                             </div>
-                            <button onclick="deleteItem('${day.id}', '${item.id}')" class="text-slate-300 hover:text-red-500 transition-colors p-1 rounded hover:bg-red-50"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                            <button onclick="deleteItem('${day.id}', '${item.id}')" class="text-slate-300 hover:text-red-500 transition-colors p-2 rounded hover:bg-red-50"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                         </div>
                     </div>
                 </div>
@@ -396,34 +401,34 @@
                     const color = item.color || defaultColors[item.type];
                     const isLast = idx === day.items.length - 1;
                     return `
-                        <div class="relative flex items-stretch gap-4 mb-4 group">
+                        <div class="relative flex items-stretch gap-3 md:gap-4 mb-4 group">
                             <div class="relative flex flex-col items-center w-6 shrink-0">
-                                <div class="w-4 h-4 rounded-full mt-2 z-10" style="background-color: ${color}; outline: 3px solid white; box-shadow: 0 0 0 4px ${color}20;"></div>
+                                <div class="w-3.5 h-3.5 md:w-4 md:h-4 rounded-full mt-2 z-10" style="background-color: ${color}; outline: 3px solid white; box-shadow: 0 0 0 4px ${color}20;"></div>
                                 ${!isLast ? `<div class="w-0.5 bg-slate-200 absolute top-7 bottom-[-24px] z-0"></div>` : ''}
                             </div>
-                            <div class="flex-1 bg-white border border-slate-100 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                            <div class="flex-1 bg-white border border-slate-100 rounded-lg p-3 md:p-4 shadow-sm hover:shadow-md transition-shadow min-w-0">
                                 <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-2">
-                                    <h4 class="font-bold text-slate-800 text-lg break-words leading-tight">${item.title || t('session')}</h4>
-                                    <span class="text-sm font-bold text-slate-600 bg-slate-50 border border-slate-100 px-3 py-1 rounded-md shrink-0 text-center" dir="ltr">
+                                    <h4 class="font-bold text-slate-800 text-base md:text-lg break-words leading-tight">${item.title || t('session')}</h4>
+                                    <span class="text-xs md:text-sm font-bold text-slate-600 bg-slate-50 border border-slate-100 px-2 py-1 md:px-3 md:py-1 rounded-md shrink-0 text-center" dir="ltr">
                                         ${item._calculatedStart} - ${item._calculatedEnd}<br>
-                                        <span class="text-xs font-normal text-slate-400">(${item.duration}m)</span>
+                                        <span class="text-[10px] md:text-xs font-normal text-slate-400">(${item.duration}m)</span>
                                     </span>
                                 </div>
-                                ${item.desc ? `<p class="text-slate-500 text-sm whitespace-pre-wrap leading-relaxed">${item.desc}</p>` : ''}
+                                ${item.desc ? `<p class="text-slate-500 text-xs md:text-sm whitespace-pre-wrap leading-relaxed">${item.desc}</p>` : ''}
                             </div>
                         </div>
                     `;
                 }).join('');
 
                 return `
-                    <div class="mb-12">
-                        <div class="flex flex-wrap items-center gap-3 border-b-2 border-slate-100 pb-4 mb-6">
-                            <span class="bg-primary text-white px-3 py-1 rounded-md text-sm font-bold shadow-sm">${t('day')} ${index + 1}</span>
-                            <h3 class="text-xl font-bold text-slate-800 break-words">${day.title}</h3>
-                            <span class="text-sm font-semibold text-slate-400 ms-auto bg-slate-50 px-3 py-1 rounded-full border border-slate-200" dir="ltr">${day.startTime} - ${day.endTime}</span>
+                    <div class="mb-10 md:mb-12">
+                        <div class="flex flex-wrap items-center gap-2 md:gap-3 border-b-2 border-slate-100 pb-3 md:pb-4 mb-4 md:mb-6">
+                            <span class="bg-primary text-white px-2 py-1 md:px-3 rounded-md text-xs md:text-sm font-bold shadow-sm">${t('day')} ${index + 1}</span>
+                            <h3 class="text-lg md:text-xl font-bold text-slate-800 break-words">${day.title}</h3>
+                            <span class="text-xs md:text-sm font-semibold text-slate-400 ms-auto bg-slate-50 px-2 md:px-3 py-1 rounded-full border border-slate-200" dir="ltr">${day.startTime} - ${day.endTime}</span>
                         </div>
-                        <div class="w-full h-5 sm:h-6 bg-slate-100 rounded-full overflow-hidden flex shadow-inner mb-8 border border-slate-200">
-                            ${day.items.length > 0 ? barBlocks : `<div class="w-full h-full flex items-center justify-center text-slate-400 text-xs">...</div>`}
+                        <div class="w-full h-4 sm:h-5 md:h-6 bg-slate-100 rounded-full overflow-hidden flex shadow-inner mb-6 md:mb-8 border border-slate-200">
+                            ${day.items.length > 0 ? barBlocks : `<div class="w-full h-full flex items-center justify-center text-slate-400 text-[10px]">...</div>`}
                         </div>
                         <div class="relative ms-1 sm:ms-2">${listItems}</div>
                     </div>
@@ -431,22 +436,29 @@
             }).join('');
 
             return `
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-10 max-w-4xl mx-auto">
-                    <div class="text-center mb-12 border-b-2 border-slate-100 pb-8">
-                        <h2 class="text-3xl font-bold text-slate-800 mb-2 break-words">${state.title || t('appTitle')}</h2>
-                        <p class="text-slate-500 flex items-center justify-center gap-2 font-medium"><i data-lucide="split-square-vertical" class="w-4 h-4"></i> ${t('tabTimeline')}</p>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6 md:p-10 max-w-4xl mx-auto">
+                    <div class="text-center mb-8 md:mb-12 border-b-2 border-slate-100 pb-6 md:pb-8">
+                        <h2 class="text-2xl md:text-3xl font-bold text-slate-800 mb-2 break-words">${state.title || t('appTitle')}</h2>
+                        <p class="text-slate-500 text-sm md:text-base flex items-center justify-center gap-2 font-medium"><i data-lucide="split-square-vertical" class="w-4 h-4"></i> ${t('tabTimeline')}</p>
                     </div>
                     <div>${daysHTML}</div>
                 </div>
             `;
         };
 
+        // --- 5. Event Listeners ---
         const initSortables = () => {
             sortableInstances.forEach(s => s.destroy()); sortableInstances = [];
             document.querySelectorAll('.sortable-list').forEach(listEl => {
                 const sortable = Sortable.create(listEl, {
-                    group: 'agenda-items', animation: 150, handle: '.drag-handle',
-                    ghostClass: 'sortable-ghost', dragClass: 'sortable-drag',
+                    group: 'agenda-items', 
+                    animation: 150, 
+                    handle: '.drag-handle',
+                    ghostClass: 'sortable-ghost', 
+                    dragClass: 'sortable-drag',
+                    delay: 150, // Critical for mobile: wait 150ms before dragging
+                    delayOnTouchOnly: true, // Only delay on touch devices so PC users feel instant snap
+                    touchStartThreshold: 5, // Allows 5px of movement before canceling drag (lets users scroll!)
                     onEnd: function (evt) {
                         const item = state.days.find(d => d.id === evt.from.dataset.dayId).items.splice(evt.oldIndex, 1)[0];
                         state.days.find(d => d.id === evt.to.dataset.dayId).items.splice(evt.newIndex, 0, item);
@@ -508,37 +520,54 @@
             const reader = new FileReader();
             reader.onload = (event) => {
                 try { const data = JSON.parse(event.target.result); if(data.days) { state = data; renderApp(); showToast(t('imported')); } } 
-                catch (err) { alert("Invalid JSON"); }
+                catch (err) { alert("Invalid JSON format."); }
             };
             reader.readAsText(file); e.target.value = '';
         };
 
-        // --- 7. PERFECT PDF EXPORT ENGINE ---
+        // --- 7. PERFECT ARABIC-OPTIMIZED PDF EXPORT ENGINE ---
         
+        const setButtonLoading = (btnId, isLoading) => {
+            const btn = document.getElementById(btnId);
+            if (!btn) return;
+            if (isLoading) {
+                btn.dataset.originalHtml = btn.innerHTML;
+                btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> <span>Processing...</span>`;
+                btn.disabled = true;
+                btn.classList.add('opacity-75');
+            } else {
+                btn.innerHTML = btn.dataset.originalHtml;
+                btn.disabled = false;
+                btn.classList.remove('opacity-75');
+            }
+            lucide.createIcons();
+        };
+
         const executePDFExport = (htmlContent, filename) => {
             const overlay = document.getElementById('export-overlay');
             const container = document.getElementById('pdf-render-container');
             
-            // 1. Inject HTML into the container that is part of the DOM
+            // Critical for Arabic layout generation in PDF: Apply RTL directly to the parent render element
+            const isAr = state.lang === 'ar';
+            container.setAttribute('dir', isAr ? 'rtl' : 'ltr');
+            
             container.innerHTML = htmlContent;
             
-            // 2. Show the overlay so it becomes visible to the browser engine
+            // Show overlay to put elements into browser's layout pipeline
             overlay.classList.remove('hidden');
             overlay.classList.add('flex');
 
-            // 3. Wait slightly for browser to paint fonts and styles physically on screen
+            // Wait enough time for custom fonts (Cairo) to load fully and layout to settle physically.
             setTimeout(() => {
                 const opt = {
                     margin: 0, 
                     filename: filename,
                     image: { type: 'jpeg', quality: 0.98 },
-                    html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+                    html2canvas: { scale: 2, useCORS: true, letterRendering: true, logging: false },
                     jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
                 };
                 
-                // 4. Capture the container
                 html2pdf().set(opt).from(container).save().then(() => {
-                    // 5. Hide & Cleanup
                     overlay.classList.add('hidden');
                     overlay.classList.remove('flex');
                     container.innerHTML = '';
@@ -546,29 +575,33 @@
                     console.error("PDF generation error: ", err);
                     overlay.classList.add('hidden');
                     overlay.classList.remove('flex');
-                    alert("Error generating PDF. See console.");
+                    alert("Error generating PDF. Please try again.");
                 });
-            }, 600); // 600ms gives plenty of time for rendering
+            }, 800); // 800ms gives excellent stability for Arabic font rendering
         };
 
-        const getPDFInlineStyles = () => `
-            font-family: ${state.lang === 'ar' ? "'Cairo', sans-serif" : "'Inter', sans-serif"}; 
-            direction: ${state.lang === 'ar' ? 'rtl' : 'ltr'}; 
+        const getPDFInlineStyles = (isAr) => `
+            font-family: ${isAr ? "'Cairo', sans-serif" : "'Inter', sans-serif"}; 
             color: #1e293b; 
             padding: 40px; 
             background: #ffffff;
             line-height: 1.5;
             box-sizing: border-box;
             width: 800px;
+            text-align: ${isAr ? 'right' : 'left'};
         `;
 
         const exportSyllabusPDF = () => {
+            setButtonLoading('btn-export-syllabus', true);
             recalculateTimings();
             state.title = document.getElementById('project-title').value;
+            const isAr = state.lang === 'ar';
             const filename = `Syllabus_${state.title.replace(/\s+/g, '_')}.pdf`;
+            const align = isAr ? 'right' : 'left';
             
+            // We apply explicit text-aligns locally to ensure html2canvas catches them
             let html = `
-                <div style="${getPDFInlineStyles()}">
+                <div style="${getPDFInlineStyles(isAr)}" dir="${isAr ? 'rtl' : 'ltr'}">
                     <div style="text-align: center; margin-bottom: 40px; border-bottom: 2px solid #4f46e5; padding-bottom: 20px;">
                         <h1 style="color: #0f172a; margin: 0 0 10px 0; font-size: 28px; font-weight: bold;">${state.title || t('appTitle')}</h1>
                         <p style="color: #64748b; margin: 0; font-size: 16px;">Syllabus</p>
@@ -579,14 +612,14 @@
                 html += `
                     <div style="margin-bottom: 40px; page-break-inside: avoid;">
                         <div style="border-bottom: 2px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
-                            <h2 style="color: #4f46e5; margin: 0; font-size: 20px; font-weight: bold;">${t('day')} ${index + 1}: ${day.title}</h2>
+                            <h2 style="color: #4f46e5; margin: 0; font-size: 20px; font-weight: bold; text-align: ${align};">${t('day')} ${index + 1}: ${day.title}</h2>
                             <span style="font-size: 14px; color: #64748b; direction: ltr; display: inline-block;">${day.startTime} - ${day.endTime}</span>
                         </div>
-                        <table style="width: 100%; border-collapse: collapse; font-size: 14px; text-align: ${state.lang === 'ar' ? 'right' : 'left'};">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 14px; text-align: ${align};" dir="${isAr ? 'rtl' : 'ltr'}">
                             <thead>
                                 <tr style="background-color: #f8fafc;">
-                                    <th style="padding: 12px; border-bottom: 2px solid #e2e8f0; width: 120px; color:#475569; font-weight: bold;">${t('startTime')}</th>
-                                    <th style="padding: 12px; border-bottom: 2px solid #e2e8f0; color:#475569; font-weight: bold;">Details</th>
+                                    <th style="padding: 12px; border-bottom: 2px solid #e2e8f0; width: 120px; color:#475569; font-weight: bold; text-align: ${align};">${t('startTime')}</th>
+                                    <th style="padding: 12px; border-bottom: 2px solid #e2e8f0; color:#475569; font-weight: bold; text-align: ${align};">Details</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -595,14 +628,14 @@
                 day.items.forEach(item => {
                     const color = item.color || defaultColors[item.type];
                     const bg = item.type === 'break' ? '#fef9c3' : '#ffffff';
-                    const borderSide = state.lang === 'ar' ? 'border-right' : 'border-left';
+                    const borderSide = isAr ? 'border-right' : 'border-left';
                     html += `
                         <tr style="background-color: ${bg}; border-bottom: 1px solid #e2e8f0; page-break-inside: avoid;">
-                            <td style="padding: 12px; vertical-align: top; white-space: nowrap; ${borderSide}: 4px solid ${color};">
-                                <strong style="color: #334155; font-size: 15px;">${item._calculatedStart}</strong><br>
-                                <span style="color: #64748b; font-size: 12px;">${item.duration}m</span>
+                            <td style="padding: 12px; vertical-align: top; white-space: nowrap; ${borderSide}: 4px solid ${color}; text-align: ${align};">
+                                <strong style="color: #334155; font-size: 15px; display: inline-block;" dir="ltr">${item._calculatedStart}</strong><br>
+                                <span style="color: #64748b; font-size: 12px; display: inline-block;" dir="ltr">${item.duration}m</span>
                             </td>
-                            <td style="padding: 12px; vertical-align: top;">
+                            <td style="padding: 12px; vertical-align: top; text-align: ${align};">
                                 <div style="font-weight: bold; color: #0f172a; margin-bottom: 4px; font-size: 16px; word-break: break-word;">${item.title || 'Untitled'}</div>
                                 ${item.desc ? `<div style="color: #475569; white-space: pre-wrap; word-break: break-word;">${item.desc}</div>` : ''}
                             </td>
@@ -617,12 +650,15 @@
         };
 
         const exportTimelinePDF = () => {
+            setButtonLoading('btn-export-timeline', true);
             recalculateTimings();
             state.title = document.getElementById('project-title').value;
+            const isAr = state.lang === 'ar';
             const filename = `Timeline_${state.title.replace(/\s+/g, '_')}.pdf`;
+            const align = isAr ? 'right' : 'left';
 
             let html = `
-                <div style="${getPDFInlineStyles()}">
+                <div style="${getPDFInlineStyles(isAr)}" dir="${isAr ? 'rtl' : 'ltr'}">
                     <div style="text-align: center; margin-bottom: 40px; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px;">
                         <h1 style="color: #0f172a; margin: 0 0 10px 0; font-size: 28px; font-weight: bold;">${state.title || t('appTitle')}</h1>
                         <p style="color: #64748b; margin: 0; font-size: 16px;">Timeline View</p>
@@ -637,41 +673,40 @@
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px; margin-bottom: 20px;">
                             <div style="display: flex; align-items: center; gap: 12px;">
                                 <span style="background-color: #4f46e5; color: white; padding: 4px 12px; border-radius: 6px; font-size: 14px; font-weight: bold;">${t('day')} ${index + 1}</span>
-                                <h3 style="margin: 0; font-size: 20px; font-weight: bold; color: #0f172a; word-break: break-word;">${day.title}</h3>
+                                <h3 style="margin: 0; font-size: 20px; font-weight: bold; color: #0f172a; word-break: break-word; text-align: ${align};">${day.title}</h3>
                             </div>
                             <span style="font-size: 14px; color: #64748b; border: 1px solid #e2e8f0; padding: 4px 12px; border-radius: 20px; background-color: #f8fafc; direction: ltr; display: inline-block;">${day.startTime} - ${day.endTime}</span>
                         </div>
                 `;
 
                 let blocks = '';
+                // Standard flex handles RTL fine here because we placed dir="rtl" on parent
                 day.items.forEach(item => {
                     const widthPercent = Math.max(0.5, (item.duration / totalMins) * 100);
                     const color = item.color || defaultColors[item.type];
-                    const borderSide = state.lang === 'ar' ? 'border-left' : 'border-right';
+                    const borderSide = isAr ? 'border-left' : 'border-right';
                     blocks += `<div style="width: ${widthPercent}%; height: 100%; background-color: ${color}; box-sizing: border-box; ${borderSide}: 1px solid rgba(255,255,255,0.3);"></div>`;
                 });
                 
                 html += `
-                        <div style="width: 100%; height: 24px; background-color: #f1f5f9; border-radius: 12px; display: flex; overflow: hidden; margin-bottom: 24px; border: 1px solid #e2e8f0;">
+                        <div style="width: 100%; height: 24px; background-color: #f1f5f9; border-radius: 12px; display: flex; overflow: hidden; margin-bottom: 24px; border: 1px solid #e2e8f0; flex-direction: row;">
                             ${day.items.length > 0 ? blocks : ''}
                         </div>
                 `;
 
-                const isAr = state.lang === 'ar';
                 day.items.forEach((item, idx) => {
                     const color = item.color || defaultColors[item.type];
                     const isLast = idx === day.items.length - 1;
-                    const flexDir = isAr ? 'row-reverse' : 'row';
                     const nodeMargin = isAr ? 'margin-left: 16px;' : 'margin-right: 16px;';
 
                     html += `
-                        <div style="display: flex; align-items: stretch; margin-bottom: 16px; page-break-inside: avoid; flex-direction: ${flexDir};">
+                        <div style="display: flex; align-items: stretch; margin-bottom: 16px; page-break-inside: avoid; flex-direction: row;">
                             <div style="width: 24px; display: flex; flex-direction: column; align-items: center; position: relative; flex-shrink: 0; ${nodeMargin}">
                                 <div style="width: 16px; height: 16px; border-radius: 50%; background-color: ${color}; border: 3px solid white; box-shadow: 0 0 0 2px #e2e8f0; margin-top: 6px; z-index: 10;"></div>
                                 ${!isLast ? `<div style="width: 2px; background-color: #e2e8f0; position: absolute; top: 26px; bottom: -20px; z-index: 0;"></div>` : ''}
                             </div>
-                            <div style="flex: 1; background-color: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); text-align: ${isAr ? 'right' : 'left'};">
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; flex-direction: ${flexDir};">
+                            <div style="flex: 1; background-color: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); text-align: ${align};">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; flex-direction: row;">
                                     <h4 style="margin: 0; font-size: 18px; font-weight: bold; color: #0f172a; word-break: break-word;">${item.title || t('session')}</h4>
                                     <div style="font-size: 14px; font-weight: bold; color: #475569; background-color: #f8fafc; border: 1px solid #f1f5f9; padding: 4px 8px; border-radius: 6px; text-align: center; flex-shrink: 0; margin: 0 8px; direction: ltr;">
                                         ${item._calculatedStart} - ${item._calculatedEnd} <br>
