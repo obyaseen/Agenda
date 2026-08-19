@@ -11,9 +11,6 @@
     <!-- SortableJS for Drag and Drop -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     
-    <!-- html2pdf for PDF Export -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
@@ -68,40 +65,52 @@
         input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
         input[type="color"]::-webkit-color-swatch { border: 2px solid #e2e8f0; border-radius: 6px; }
 
-        /* Print Styles - Hides UI when pressing Ctrl+P natively */
-        @media print {
-            header, .no-print, #toast, #export-overlay { display: none !important; }
-            body { background: white !important; }
-            main { padding: 0 !important; max-width: 100% !important; }
-            .bg-slate-50 { background-color: white !important; }
-            .shadow-sm, .shadow-md, .shadow-inner { box-shadow: none !important; border: 1px solid #e2e8f0; }
+        /* --- PRINT STYLES FOR NATIVE PDF EXPORT --- */
+        @media screen {
+            #print-area { display: none !important; }
         }
 
-        /* Explicit page break helpers for html2pdf Engine */
-        .page-break-avoid { 
-            page-break-inside: avoid !important; 
-            break-inside: avoid !important; 
+        @media print {
+            body { 
+                background: white !important; 
+                margin: 0; 
+                padding: 0; 
+            }
+            #app, header, #toast { 
+                display: none !important; 
+            }
+            #print-area { 
+                display: block !important; 
+                width: 100%; 
+            }
+            
+            /* Define Page Margins */
+            @page { 
+                size: A4 portrait; 
+                margin: 1cm 1.5cm; 
+            }
+            
+            /* Force browsers to print background colors and shapes */
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            
+            /* Prevent awkward page breaks inside items */
+            .page-break-avoid { 
+                page-break-inside: avoid !important; 
+                break-inside: avoid !important; 
+            }
         }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen text-slate-800 selection:bg-primary selection:text-white transition-all duration-300 relative overflow-x-hidden">
 
+    <!-- Print Render Area -->
+    <div id="print-area"></div>
+
+    <!-- Main App UI -->
     <div id="app"></div>
-
-    <!-- EXPORT OVERLAY (Loading State Only) -->
-    <div id="export-overlay" class="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[9999] hidden flex-col items-center justify-center p-4 transition-opacity">
-        <div class="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center text-center max-w-md w-full border-2 border-indigo-100">
-            <i data-lucide="loader-2" class="w-12 h-12 text-primary animate-spin mb-4"></i>
-            <h2 class="text-xl md:text-2xl font-bold text-slate-800">Generating PDF...</h2>
-            <p class="text-slate-500 text-sm mt-2">Processing page breaks and optimizing layout.</p>
-        </div>
-    </div>
-
-    <!-- HIDDEN PDF RENDER CONTAINER -->
-    <!-- Positioned far off-screen to allow unbounded height rendering without scroll bugs -->
-    <div style="position: absolute; top: 0; left: -9999px; width: 800px; z-index: -1;">
-        <div id="pdf-render-container" class="bg-white w-full"></div>
-    </div>
 
     <!-- Notification Toast -->
     <div id="toast" class="fixed bottom-4 end-4 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center gap-3 z-50 pointer-events-none">
@@ -211,7 +220,7 @@
                 deleteConfirm: "هل أنت متأكد من حذف هذا اليوم؟",
                 clearConfirm: "هل أنت متأكد من مسح جميع البيانات؟ لا يمكن التراجع عن هذا.",
                 imported: "تم استيراد البيانات بنجاح.",
-                exported: "تم تصدير الملف.",
+                exported: "تم تجهيز الملف للطباعة.",
                 dragDropEmpty: "اسحب العناصر هنا أو أضف عناصر جديدة"
             }
         };
@@ -725,7 +734,7 @@
             reader.readAsText(file); e.target.value = '';
         };
 
-        // --- 7. MULTI-PAGE & ARABIC-OPTIMIZED PDF EXPORT ENGINE ---
+        // --- 7. NATIVE PRINT EXPORT ENGINE (Fixes RTL/Arabic Issues) ---
         
         const setButtonLoading = (btnId, isLoading) => {
             const btn = document.getElementById(btnId);
@@ -744,64 +753,44 @@
         };
 
         const executePDFExport = (htmlContent, filename, btnId) => {
-            const overlay = document.getElementById('export-overlay');
-            const container = document.getElementById('pdf-render-container');
-            
+            const printArea = document.getElementById('print-area');
             const isAr = state.lang === 'ar';
-            container.setAttribute('dir', isAr ? 'rtl' : 'ltr');
-            container.innerHTML = htmlContent;
             
-            overlay.classList.remove('hidden');
-            overlay.classList.add('flex');
+            printArea.setAttribute('dir', isAr ? 'rtl' : 'ltr');
+            printArea.innerHTML = htmlContent;
+            
+            if (btnId) setButtonLoading(btnId, true);
 
-            window.scrollTo(0, 0);
+            // Temporarily set document title so browser print uses it for default filename
+            const originalTitle = document.title;
+            document.title = filename.replace(/\.pdf$/, '');
 
+            // Use a short delay to allow DOM render and fonts to apply before opening print dialog
             setTimeout(() => {
-                const opt = {
-                    margin: 0.5, 
-                    filename: filename,
-                    image: { type: 'jpeg', quality: 1 },
-                    html2canvas: { 
-                        scale: 2, 
-                        useCORS: true, 
-                        logging: false,
-                        scrollY: 0, 
-                        windowWidth: 800
-                    }, 
-                    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
-                    pagebreak: { mode: ['css', 'legacy'], avoid: '.page-break-avoid' }
-                };
+                window.print();
                 
-                html2pdf().set(opt).from(container).save().then(() => {
-                    overlay.classList.add('hidden');
-                    overlay.classList.remove('flex');
-                    container.innerHTML = '';
-                    if (btnId) setButtonLoading(btnId, false);
-                }).catch(err => {
-                    console.error("PDF error: ", err);
-                    overlay.classList.add('hidden');
-                    overlay.classList.remove('flex');
-                    container.innerHTML = '';
-                    if (btnId) setButtonLoading(btnId, false);
-                    alert("Error generating PDF. Please try again.");
-                });
-            }, 600); 
+                // Cleanup after print dialog is closed
+                document.title = originalTitle;
+                printArea.innerHTML = '';
+                if (btnId) setButtonLoading(btnId, false);
+                showToast(t('exported'));
+            }, 500); 
         };
 
         const getPDFInlineStyles = (isAr) => `
             font-family: ${isAr ? "'Cairo', sans-serif" : "'Inter', sans-serif"}; 
-            color: #1e293b; 
+            color: #0f172a; 
             background: #ffffff;
-            line-height: 1.5;
+            line-height: 1.6;
             box-sizing: border-box;
             width: 100%;
-            padding: 10px;
+            max-width: 1000px;
+            margin: 0 auto;
             text-align: ${isAr ? 'right' : 'left'};
         `;
 
         const exportSyllabusPDF = () => {
             const btnId = 'btn-export-syllabus';
-            setButtonLoading(btnId, true);
             recalculateTimings();
             const isAr = state.lang === 'ar';
             const safeTitle = state.title ? '_' + state.title.replace(/\s+/g, '_') : '';
@@ -845,7 +834,6 @@
                     </div>
                 `;
 
-                // Layout built perfectly with absolute positioning & margins (100% immune to html2canvas flex/table bugs)
                 html += `
                     <div class="page-break-avoid" style="position: relative; background-color: #f8fafc; border-bottom: 2px solid #e2e8f0; font-weight: bold; color: #475569; font-size: 14px; min-height: 45px;">
                         <div style="position: absolute; top: 0; ${side}: 0; width: 120px; padding: 12px; text-align: ${align}; box-sizing: border-box;">${t('startTime')}</div>
@@ -880,7 +868,6 @@
 
         const exportTimelinePDF = () => {
             const btnId = 'btn-export-timeline';
-            setButtonLoading(btnId, true);
             recalculateTimings();
             const isAr = state.lang === 'ar';
             const safeTitle = state.title ? '_' + state.title.replace(/\s+/g, '_') : '';
@@ -948,7 +935,6 @@
                     const color = item.color || defaultColors[item.type];
                     const isLast = idx === day.items.length - 1;
 
-                    // Timeline layout perfected with absolute + margins
                     html += `
                         <div class="page-break-avoid" style="position: relative; margin-bottom: 16px; min-height: 80px; overflow: hidden;">
                             <div style="position: absolute; top: 0; ${side}: 0; width: 48px; height: 100%;">
@@ -986,6 +972,5 @@
     </script>
 </body>
 </html>
-
 
 
