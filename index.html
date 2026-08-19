@@ -182,7 +182,10 @@
                 clearConfirm: "Are you sure you want to clear all data? This cannot be undone.",
                 imported: "Data imported successfully.",
                 exported: "File exported.",
-                dragDropEmpty: "Drag items here or add new ones"
+                dragDropEmpty: "Drag items here or add new ones",
+                stretchToFit: "Stretch to End Time",
+                stretchedToast: "Activities stretched to fill the available time.",
+                timeError: "End time must be after start time."
             },
             ar: {
                 appTitle: "ادخل العنوان",
@@ -221,7 +224,10 @@
                 clearConfirm: "هل أنت متأكد من مسح جميع البيانات؟ لا يمكن التراجع عن هذا.",
                 imported: "تم استيراد البيانات بنجاح.",
                 exported: "تم تجهيز الملف للطباعة.",
-                dragDropEmpty: "اسحب العناصر هنا أو أضف عناصر جديدة"
+                dragDropEmpty: "اسحب العناصر هنا أو أضف عناصر جديدة",
+                stretchToFit: "توزيع الأنشطة على الوقت",
+                stretchedToast: "تم توزيع الأنشطة على الوقت المتاح بنجاح.",
+                timeError: "يجب أن يكون وقت الانتهاء بعد وقت البدء."
             }
         };
 
@@ -406,7 +412,7 @@
                                     <input type="text" class="font-bold text-lg md:text-xl text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none w-full min-w-0 day-title-input" value="${escapeHTML(day.title)}" data-day-id="${day.id}">
                                 </div>
                             </div>
-                            <div class="flex items-center">
+                            <div class="flex items-center shrink-0">
                                 <button class="text-slate-400 hover:text-primary p-2 transition-colors rounded-full hover:bg-indigo-50" onclick="toggleCollapseDay('${day.id}')">
                                     <i data-lucide="${isCollapsed ? 'chevron-down' : 'chevron-up'}" class="w-5 h-5"></i>
                                 </button>
@@ -425,13 +431,19 @@
                                 <label class="block text-[11px] font-bold text-slate-400 mb-1 uppercase tracking-wider">${t('endTime')} ${isAutoEnd ? '(Auto)' : ''}</label>
                                 <input type="time" class="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary day-end-input" value="${day.endTime}" data-day-id="${day.id}" ${isAutoEnd ? 'readonly disabled class="opacity-60"' : ''}>
                             </div>
-                            <div class="col-span-2">
-                                <label class="block text-[11px] font-bold text-slate-400 mb-1 uppercase tracking-wider">${t('scheduleMode')}</label>
-                                <select class="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary day-mode-select text-xs font-semibold text-slate-600 cursor-pointer" data-day-id="${day.id}">
-                                    <option value="manual" ${day.mode === 'manual' ? 'selected' : ''}>${t('modeManual')}</option>
-                                    <option value="auto-end" ${day.mode === 'auto-end' ? 'selected' : ''}>${t('modeAutoEnd')}</option>
-                                    <option value="auto-stretch" ${day.mode === 'auto-stretch' ? 'selected' : ''}>${t('modeAutoStretch')}</option>
-                                </select>
+                            
+                            <div class="col-span-2 flex flex-col sm:flex-row gap-2 sm:items-end mt-1">
+                                <div class="flex-1">
+                                    <label class="block text-[11px] font-bold text-slate-400 mb-1 uppercase tracking-wider">${t('scheduleMode')}</label>
+                                    <select class="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary day-mode-select text-xs font-semibold text-slate-600 cursor-pointer" data-day-id="${day.id}">
+                                        <option value="manual" ${day.mode === 'manual' ? 'selected' : ''}>${t('modeManual')}</option>
+                                        <option value="auto-end" ${day.mode === 'auto-end' ? 'selected' : ''}>${t('modeAutoEnd')}</option>
+                                        <option value="auto-stretch" ${day.mode === 'auto-stretch' ? 'selected' : ''}>${t('modeAutoStretch')}</option>
+                                    </select>
+                                </div>
+                                <button class="w-full sm:w-auto bg-primary hover:bg-indigo-700 text-white px-3 py-1.5 rounded-md text-xs font-bold shadow transition-all hover:shadow-md flex justify-center items-center gap-1.5 border border-transparent h-[34px]" onclick="stretchDay('${day.id}')" title="${t('stretchToFit')}">
+                                    <i data-lucide="expand" class="w-3.5 h-3.5"></i> <span class="whitespace-nowrap">${t('stretchToFit')}</span>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -694,6 +706,41 @@
         
         const addItem = (dayId, type) => { state.days.find(d => d.id === dayId).items.push({ id: generateId(), title: type === 'session' ? t('session') : t('break'), type: type, duration: type === 'session' ? 60 : 15, desc: "", color: defaultColors[type] }); renderApp(); };
         const deleteItem = (dayId, itemId) => { const day = state.days.find(d => d.id === dayId); day.items = day.items.filter(i => i.id !== itemId); renderApp(); };
+
+        // One-click stretch trigger
+        const stretchDay = (id) => {
+            const day = state.days.find(d => d.id === id);
+            if (!day) return;
+            
+            let startMins = timeToMins(day.startTime);
+            let endMins = timeToMins(day.endTime);
+            
+            if (startMins >= endMins) {
+                showToast(t('timeError'));
+                return;
+            }
+
+            const totalAvailableMins = endMins - startMins;
+            const fixedItems = day.items.filter(i => i.type !== 'session');
+            const flexItems = day.items.filter(i => i.type === 'session');
+            
+            const fixedMins = fixedItems.reduce((sum, i) => sum + (Number(i.duration) || 0), 0);
+            const remainingMins = Math.max(0, totalAvailableMins - fixedMins);
+            
+            if (flexItems.length > 0) {
+                const flexDuration = Math.floor(remainingMins / flexItems.length);
+                flexItems.forEach(i => i.duration = flexDuration);
+                // Add any remainder to the last session item to perfectly fill the gap
+                if (remainingMins % flexItems.length !== 0) {
+                    flexItems[flexItems.length - 1].duration += (remainingMins % flexItems.length);
+                }
+            }
+            
+            // Switch day to manual so the user can finely adjust the calculated times without losing them
+            day.mode = 'manual';
+            renderApp();
+            showToast(t('stretchedToast'));
+        };
 
         // Export/Import JSON 
         const exportJSON = () => {
@@ -972,5 +1019,6 @@
     </script>
 </body>
 </html>
+
 
 
